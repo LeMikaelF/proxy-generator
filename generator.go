@@ -42,13 +42,7 @@ func main() {
 
 	filename := args[0]
 
-	excludeMap := map[string]bool{}
-	if excludeMethods != "" {
-		excludeList := strings.Split(excludeMethods, ",")
-		for _, m := range excludeList {
-			excludeMap[m] = true
-		}
-	}
+	excludeMap := createExcludeMap(excludeMethods)
 
 	fset := token.NewFileSet()
 	fileNode, err := parser.ParseFile(fset, filename, nil, parser.AllErrors)
@@ -56,24 +50,15 @@ func main() {
 		log.Fatalf("error parsing file %s: %v", filename, err)
 	}
 
-	structDecl := findDeclaration(typeName, fileNode)
+	structDecl := findStructDeclaration(fileNode, typeName)
 	if structDecl == nil {
 		log.Fatalf("could not find struct declaration with name %s", typeName)
 	}
 
-	typeSpec, ok := structDecl.Specs[0].(*ast.TypeSpec)
-	if !ok {
-		log.Fatalf("unexpected type specification %T", structDecl.Specs[0])
-	}
+	typeSpec := extractTypeSpec(structDecl)
+	structType := extractStructType(typeSpec)
 
-	structType, ok := typeSpec.Type.(*ast.StructType)
-	if !ok {
-		log.Fatalf("unexpected struct type %T", typeSpec.Type)
-	}
-
-	var methods []method
-
-	methods = findMethods(fileNode, typeName, excludeMap)
+	methods := findMethods(fileNode, typeName, excludeMap)
 
 	tmpl := template.Must(template.New("decorator").Parse(decoratorTemplate))
 
@@ -98,18 +83,43 @@ func main() {
 	fmt.Println(string(formatted))
 }
 
-func findDeclaration(name string, node *ast.File) *ast.GenDecl {
-	for _, decl := range node.Decls {
-		if genDecl, ok := decl.(*ast.GenDecl); ok {
-			for _, spec := range genDecl.Specs {
-				typeSpec, ok := spec.(*ast.TypeSpec)
-				if ok && typeSpec.Name.Name == name && genDecl.Tok == token.TYPE {
-					return genDecl
-				}
-			}
+func createExcludeMap(excludeMethods string) map[string]bool {
+	excludeMap := map[string]bool{}
+	if excludeMethods != "" {
+		excludeList := strings.Split(excludeMethods, ",")
+		for _, m := range excludeList {
+			excludeMap[m] = true
 		}
 	}
-	return nil
+	return excludeMap
+}
+
+func findStructDeclaration(fileNode *ast.File, typeName string) *ast.GenDecl {
+	var structDecl *ast.GenDecl
+	ast.Inspect(fileNode, func(n ast.Node) bool {
+		genDecl, ok := n.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.TYPE {
+			return true
+		}
+
+		for _, spec := range genDecl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if ok && typeSpec.Name.Name == typeName {
+				structDecl = genDecl
+				return false
+			}
+		}
+		return true
+	})
+	return structDecl
+}
+
+func extractTypeSpec(genDecl *ast.GenDecl) *ast.TypeSpec {
+	return genDecl.Specs[0].(*ast.TypeSpec)
+}
+
+func extractStructType(typeSpec *ast.TypeSpec) *ast.StructType {
+	return typeSpec.Type.(*ast.StructType)
 }
 
 func signature(fields *ast.FieldList) string {
@@ -136,10 +146,10 @@ func signatureParamNames(fields *ast.FieldList) string {
 	return strings.Join(paramNames, ", ")
 }
 
-func findMethods(f *ast.File, structName string, excludeMap map[string]bool) []method {
+func findMethods(fileNode *ast.File, structName string, excludeMap map[string]bool) []method {
 	var methods []method
 
-	ast.Inspect(f, func(n ast.Node) bool {
+	ast.Inspect(fileNode, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || excludeMap[funcDecl.Name.Name] {
 			return true
@@ -153,26 +163,11 @@ func findMethods(f *ast.File, structName string, excludeMap map[string]bool) []m
 
 		ident, ok := recvType.(*ast.Ident)
 		if ok && ident.Name == structName {
-			var params []string
-			var paramNames []string
-			for _, field := range funcDecl.Type.Params.List {
-				paramType := getTypeString(field.Type)
-				for _, paramName := range field.Names {
-					params = append(params, paramName.Name+" "+paramType)
-					paramNames = append(paramNames, paramName.Name)
-				}
-			}
-			var results []string
-			if funcDecl.Type.Results != nil {
-				for _, field := range funcDecl.Type.Results.List {
-					results = append(results, getTypeString(field.Type))
-				}
-			}
 			m := method{
 				Name:       funcDecl.Name.Name,
-				Params:     strings.Join(params, ", "),
-				Results:    strings.Join(results, ", "),
-				ParamNames: strings.Join(paramNames, ", "),
+				Params:     extractParams(funcDecl),
+				Results:    extractResults(funcDecl),
+				ParamNames: extractParamNames(funcDecl),
 			}
 			methods = append(methods, m)
 		}
@@ -181,6 +176,37 @@ func findMethods(f *ast.File, structName string, excludeMap map[string]bool) []m
 	})
 
 	return methods
+}
+
+func extractParams(funcDecl *ast.FuncDecl) string {
+	var params []string
+	for _, field := range funcDecl.Type.Params.List {
+		paramType := getTypeString(field.Type)
+		for _, paramName := range field.Names {
+			params = append(params, paramName.Name+" "+paramType)
+		}
+	}
+	return strings.Join(params, ", ")
+}
+
+func extractResults(funcDecl *ast.FuncDecl) string {
+	var results []string
+	if funcDecl.Type.Results != nil {
+		for _, field := range funcDecl.Type.Results.List {
+			results = append(results, getTypeString(field.Type))
+		}
+	}
+	return strings.Join(results, ", ")
+}
+
+func extractParamNames(funcDecl *ast.FuncDecl) string {
+	var paramNames []string
+	for _, field := range funcDecl.Type.Params.List {
+		for _, paramName := range field.Names {
+			paramNames = append(paramNames, paramName.Name)
+		}
+	}
+	return strings.Join(paramNames, ", ")
 }
 
 func getTypeString(expr ast.Expr) string {
@@ -205,20 +231,20 @@ type {{.DecoratorName}} struct {
 
 {{range .Methods}}
 func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
-		d.advice(func() {
-			d.original.{{.Name}}({{.ParamNames}})
-		})
+	d.advice(func() {
+		d.original.{{.Name}}({{.ParamNames}})
+	})
 }
 {{end}}
 
 func New{{.DecoratorName}}(advice func(func()), {{.ConstructorParams}}) *{{.DecoratorName}} {
 	if advice == nil {
-        advice = func(fn func()) { fn() }
-    }
+		advice = func(fn func()) { fn() }
+	}
 
 	return &{{.DecoratorName}}{
 		original: New{{.StructName}}({{.ConstructorParamNames}}),
-		advice: advice,
+		advice:   advice,
 	}
 }
 `
