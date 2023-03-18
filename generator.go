@@ -14,22 +14,10 @@ import (
 )
 
 type method struct {
-	Name        string
-	Params      string
-	Results     string
-	ParamNames  string
-	Exclude     bool
-	ExcludeName string
-}
-
-func (m *method) IsExcluded() bool {
-	if m.Exclude {
-		return true
-	}
-	if m.ExcludeName != "" && m.ExcludeName == m.Name {
-		return true
-	}
-	return false
+	Name       string
+	Params     string
+	Results    string
+	ParamNames string
 }
 
 type data struct {
@@ -63,12 +51,12 @@ func main() {
 	}
 
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filename, nil, parser.AllErrors)
+	fileNode, err := parser.ParseFile(fset, filename, nil, parser.AllErrors)
 	if err != nil {
 		log.Fatalf("error parsing file %s: %v", filename, err)
 	}
 
-	structDecl := findDeclaration(typeName, node)
+	structDecl := findDeclaration(typeName, fileNode)
 	if structDecl == nil {
 		log.Fatalf("could not find struct declaration with name %s", typeName)
 	}
@@ -85,55 +73,23 @@ func main() {
 
 	var methods []method
 
-	for _, field := range structType.Fields.List {
-		if field.Names == nil {
-			continue
-		}
-
-		for _, name := range field.Names {
-			if _, ok := field.Type.(*ast.FuncType); !ok {
-				continue
-			}
-
-			paramNames := make([]string, len(field.Type.(*ast.FuncType).Params.List))
-			for i, param := range field.Type.(*ast.FuncType).Params.List {
-				paramNames[i] = param.Names[0].Name
-			}
-
-			method := method{
-				Name:       name.Name,
-				Params:     signature(field.Type.(*ast.FuncType).Params),
-				Results:    signature(field.Type.(*ast.FuncType).Results),
-				ParamNames: strings.Join(paramNames, ", "),
-			}
-
-			if excludeMap[name.Name] {
-				method.Exclude = true
-				method.ExcludeName = name.Name
-			}
-
-			methods = append(methods, method)
-		}
-	}
+	methods = findMethods(fileNode, typeName, excludeMap)
 
 	tmpl := template.Must(template.New("decorator").Parse(decoratorTemplate))
 
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, data{
-		PackageName:           node.Name.Name,
+		PackageName:           fileNode.Name.Name,
 		StructName:            typeSpec.Name.Name,
 		DecoratorName:         typeSpec.Name.Name + "Decorator",
 		Methods:               methods,
 		ConstructorParams:     signature(structType.Fields),
 		ConstructorParamNames: signatureParamNames(structType.Fields),
-		//ConstructorParams:     signature(structType.Fields.List[0].Type.(*ast.FuncType).Params),
-		//ConstructorParamNames: signatureParamNames(structType.Fields.List[0].Type.(*ast.FuncType).Params),
 	})
 	if err != nil {
 		log.Fatalf("error executing template: %v", err)
 	}
 
-	fmt.Println(string(buf.Bytes()))
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
 		log.Fatalf("error formatting code: %v", err)
@@ -180,11 +136,67 @@ func signatureParamNames(fields *ast.FieldList) string {
 	return strings.Join(paramNames, ", ")
 }
 
-const decoratorTemplate = `package {{.PackageName}}
+func findMethods(f *ast.File, structName string, excludeMap map[string]bool) []method {
+	var methods []method
 
-// import (
-// 	"context"
-// )
+	ast.Inspect(f, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || excludeMap[funcDecl.Name.Name] {
+			return true
+		}
+
+		recvType := funcDecl.Recv.List[0].Type
+		starExpr, isStar := recvType.(*ast.StarExpr)
+		if isStar {
+			recvType = starExpr.X
+		}
+
+		ident, ok := recvType.(*ast.Ident)
+		if ok && ident.Name == structName {
+			var params []string
+			var paramNames []string
+			for _, field := range funcDecl.Type.Params.List {
+				paramType := getTypeString(field.Type)
+				for _, paramName := range field.Names {
+					params = append(params, paramName.Name+" "+paramType)
+					paramNames = append(paramNames, paramName.Name)
+				}
+			}
+			var results []string
+			if funcDecl.Type.Results != nil {
+				for _, field := range funcDecl.Type.Results.List {
+					results = append(results, getTypeString(field.Type))
+				}
+			}
+			m := method{
+				Name:       funcDecl.Name.Name,
+				Params:     strings.Join(params, ", "),
+				Results:    strings.Join(results, ", "),
+				ParamNames: strings.Join(paramNames, ", "),
+			}
+			methods = append(methods, m)
+		}
+
+		return true
+	})
+
+	return methods
+}
+
+func getTypeString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return "*" + getTypeString(t.X)
+	case *ast.SelectorExpr:
+		return t.X.(*ast.Ident).Name + "." + t.Sel.Name
+	default:
+		return ""
+	}
+}
+
+const decoratorTemplate = `package {{.PackageName}}
 
 type {{.DecoratorName}} struct {
 	original *{{.StructName}}
@@ -193,17 +205,17 @@ type {{.DecoratorName}} struct {
 
 {{range .Methods}}
 func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
-	if d.advice != nil {
 		d.advice(func() {
 			d.original.{{.Name}}({{.ParamNames}})
 		})
-	} else {
-		d.original.{{.Name}}({{.ParamNames}})
-	}
 }
 {{end}}
 
 func New{{.DecoratorName}}(advice func(func()), {{.ConstructorParams}}) *{{.DecoratorName}} {
+	if advice == nil {
+        advice = func(fn func()) { fn() }
+    }
+
 	return &{{.DecoratorName}}{
 		original: New{{.StructName}}({{.ConstructorParamNames}}),
 		advice: advice,

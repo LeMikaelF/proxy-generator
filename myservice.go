@@ -2,15 +2,16 @@ package main
 
 import "context"
 
-//go:generate go run generator.go --type myService --exclude-methods MyMethod myservice.go
-type myService struct {
+//go:generate go run generator.go --type MyService --exclude-methods MyMethod myservice.go
+type MyService struct {
 	param1 string
+	param2 string
 }
 
-func NewService(param1 string) *myService {
-	return &myService{param1}
+func NewService(param1 string, param2 string) *MyService {
+	return &MyService{param1, param2}
 }
 
-func (s *myService) MyMethod(ctx context.Context) {}
+func (s *MyService) MyMethod(ctx context.Context) {}
 
-func (s *myService) MyDecoratedMethod() {}
+func (s *MyService) MyDecoratedMethod() {}
