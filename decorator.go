@@ -6,7 +6,7 @@ import (
 	"context"
 )
 
-type MyServiceDecorator struct {
+type MyServiceProxy struct {
 	original *MyService
 	advice   func(MyServiceMethodInfo, []any, func([]any) []any) []any
 }
@@ -20,7 +20,7 @@ func (m *MyServiceMethodInfo) MethodName() string {
 	return m.methodName
 }
 
-func (d *MyServiceDecorator) MyDecoratedMethod() {
+func (d *MyServiceProxy) MyDecoratedMethod() {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyDecoratedMethod",
 		typeName:   "MyService",
@@ -35,7 +35,7 @@ func (d *MyServiceDecorator) MyDecoratedMethod() {
 	d.advice(methodInfo, args, proxiedFunc)
 }
 
-func (d *MyServiceDecorator) MyContextMethod(ctx context.Context) {
+func (d *MyServiceProxy) MyContextMethod(ctx context.Context) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyContextMethod",
 		typeName:   "MyService",
@@ -50,7 +50,7 @@ func (d *MyServiceDecorator) MyContextMethod(ctx context.Context) {
 	d.advice(methodInfo, args, proxiedFunc)
 }
 
-func (d *MyServiceDecorator) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
+func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyFuncReturnsError",
 		typeName:   "MyService",
@@ -66,14 +66,14 @@ func (d *MyServiceDecorator) MyFuncReturnsError(ctx context.Context, myType myUn
 	return results[0].(string), results[1].(error)
 }
 
-func NewMyServiceDecorator(delegate *MyService, advice func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *MyServiceDecorator {
+func NewMyServiceProxy(delegate *MyService, advice func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *MyServiceProxy {
 	if advice == nil {
 		advice = func(info MyServiceMethodInfo, args []any, proxiedFunc func([]any) []any) []any {
 			return proxiedFunc(args)
 		}
 	}
 
-	return &MyServiceDecorator{
+	return &MyServiceProxy{
 		original: delegate,
 		advice:   advice,
 	}

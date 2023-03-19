@@ -7,7 +7,7 @@ import (
 )
 
 func Test_MyStuff(_ *testing.T) {
-	decorator := NewMyServiceDecorator(NewMyService("a", "b"), func(info MyServiceMethodInfo, args []any, fn func([]any) []any) []any {
+	proxy := NewMyServiceProxy(NewMyService("a", "b"), func(info MyServiceMethodInfo, args []any, fn func([]any) []any) []any {
 		fmt.Printf("In method %s\n", info.methodName)
 
 		retVals := fn(args)
@@ -30,6 +30,6 @@ func Test_MyStuff(_ *testing.T) {
 		}
 		return retVals
 	})
-	decorator.MyDecoratedMethod()
-	decorator.MyContextMethod(context.Background())
+	proxy.MyDecoratedMethod()
+	proxy.MyContextMethod(context.Background())
 }

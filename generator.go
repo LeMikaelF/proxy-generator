@@ -30,15 +30,15 @@ type method struct {
 }
 
 type data struct {
-	PackageName   string
-	StructName    string
-	DecoratorName string
-	Methods       []method
-	Imports       []string
+	PackageName string
+	StructName  string
+	ProxyName   string
+	Methods     []method
+	Imports     []string
 }
 
 //go:embed proxy.tmpl
-var decoratorTemplate string
+var proxyTemplate string
 
 func main() {
 	typeName, excludedMethods := parseFlags()
@@ -82,13 +82,13 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	err = template.Must(template.New("decorator").Parse(decoratorTemplate)).
+	err = template.Must(template.New("proxy").Parse(proxyTemplate)).
 		Execute(&buf, data{
-			PackageName:   packageName,
-			StructName:    typeName,
-			DecoratorName: typeName + "Decorator",
-			Methods:       methods,
-			Imports:       toSlice(imports),
+			PackageName: packageName,
+			StructName:  typeName,
+			ProxyName:   typeName + "Proxy",
+			Methods:     methods,
+			Imports:     toSlice(imports),
 		})
 	if err != nil {
 		log.Fatalf("error executing template: %v", err)
@@ -123,7 +123,7 @@ func parseFlags() (typeName string, excludedMethods map[string]bool) {
 	flag.Parse()
 
 	if typeName == "" {
-		log.Fatal("usage: custom-decorator --type <type> [--exclude-methods <method1,method2>]")
+		log.Fatal("usage: custom-proxy --type <type> [--exclude-methods <method1,method2>]")
 	}
 	return typeName, csvToMap(excludeMethods)
 }

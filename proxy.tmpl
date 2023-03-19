@@ -6,7 +6,7 @@ package {{.PackageName}}
 	"{{.}}"{{end}}
 ){{end}}
 
-type {{.DecoratorName}} struct {
+type {{.ProxyName}} struct {
 	original *{{.StructName}}
 	advice   func({{.StructName}}MethodInfo, []any, func([]any) []any) []any
 }
@@ -21,7 +21,7 @@ func (m *{{.StructName}}MethodInfo) MethodName() string {
 }
 
 {{range .Methods}}
-func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
+func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	methodInfo := {{$.StructName}}MethodInfo{
 		methodName: "{{.Name}}",
         typeName: "{{$.StructName}}",
@@ -42,14 +42,14 @@ func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
 
 
 
-func New{{.DecoratorName}}(delegate *{{.StructName}}, advice func(methodInfo {{.StructName}}MethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *{{.DecoratorName}} {
+func New{{.ProxyName}}(delegate *{{.StructName}}, advice func(methodInfo {{.StructName}}MethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *{{.ProxyName}} {
 	if advice == nil {
 		advice = func(info {{.StructName}}MethodInfo, args []any, proxiedFunc func([]any) []any) []any {
 			return proxiedFunc(args)
 		}
 	}
 
-	return &{{.DecoratorName}}{
+	return &{{.ProxyName}}{
 		original: delegate,
 		advice:   advice,
 	}
