@@ -79,10 +79,7 @@ func main() {
 		log.Fatalf("could not find struct declaration with name %s", typeName)
 	}
 
-	//TODO remove Funcs
-	tmpl := template.Must(template.New("decorator").Funcs(map[string]any{
-		"add": func(a, b int) int { return a + b },
-	}).Parse(decoratorTemplate))
+	tmpl := template.Must(template.New("decorator").Parse(decoratorTemplate))
 
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, data{
@@ -115,7 +112,7 @@ func getFilesInDirectory() ([]string, error) {
 		return nil, fmt.Errorf("error finding go files: %v", err)
 	}
 
-	return files, err
+	return files, nil
 }
 
 func parseFlags() (typeName string, excludeMap map[string]bool) {
