@@ -27,6 +27,7 @@ func (d *MyServiceDecorator) MyDecoratedMethod() {
 	var args []any
 
 	callOriginal := func(args []any) []any {
+		d.original.MyDecoratedMethod()
 		return []any{}
 	}
 	d.advice(methodInfo, args, callOriginal)
@@ -40,6 +41,7 @@ func (d *MyServiceDecorator) MyContextMethod(ctx context.Context) {
 	var args []any = []any{ctx}
 
 	callOriginal := func(args []any) []any {
+		d.original.MyContextMethod(args[0].(context.Context))
 		return []any{}
 	}
 	d.advice(methodInfo, args, callOriginal)

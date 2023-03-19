@@ -29,33 +29,22 @@ type method struct {
 }
 
 type data struct {
-	PackageName         string
-	StructName          string
-	DecoratorName       string
-	Methods             []method
-	Imports             []string
-	ConstructorName     string
-	ConstructorArgs     string
-	ConstructorArgNames string
+	PackageName   string
+	StructName    string
+	DecoratorName string
+	Methods       []method
+	Imports       []string
 }
 
 func main() {
-	excludeMethods, typeName := parseFlags()
-
+	typeName, excludeMap := parseFlags()
 	if !isExported(typeName) {
 		log.Fatalf("type is unexported")
 	}
 
-	excludeMap := createExcludeMap(excludeMethods)
-
-	wd, err := os.Getwd()
+	files, err := getFilesInDirectory()
 	if err != nil {
-		log.Fatalf("error getting current working directory: %v", err)
-	}
-
-	files, err := filepath.Glob(wd + "/*.go")
-	if err != nil {
-		log.Fatalf("error finding go files: %v", err)
+		log.Fatalf("error getting files in working directory: %v", err)
 	}
 
 	fset := token.NewFileSet()
@@ -64,7 +53,6 @@ func main() {
 	var methods []method
 	var packageName string
 
-	var constructorName, constructorArgs, constructorArgNames string
 	imports := make(map[string]struct{})
 
 	for _, file := range files {
@@ -85,14 +73,6 @@ func main() {
 			imports[newImport] = struct{}{}
 		}
 
-		constructorName = "New" + typeName
-		// TODO is still necessary?
-		constructorFunc := findConstructor(fileNode, constructorName)
-
-		if constructorFunc != nil {
-			constructorArgs = signature(constructorFunc.Type.Params)
-			constructorArgNames = signatureParamNames(constructorFunc.Type.Params)
-		}
 	}
 
 	if structDecl == nil {
@@ -106,14 +86,11 @@ func main() {
 
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, data{
-		PackageName:         packageName,
-		StructName:          typeName,
-		DecoratorName:       typeName + "Decorator",
-		Methods:             methods,
-		Imports:             toSlice(imports),
-		ConstructorName:     constructorName,
-		ConstructorArgs:     constructorArgs,
-		ConstructorArgNames: constructorArgNames,
+		PackageName:   packageName,
+		StructName:    typeName,
+		DecoratorName: typeName + "Decorator",
+		Methods:       methods,
+		Imports:       toSlice(imports),
 	})
 	if err != nil {
 		log.Fatalf("error executing template: %v", err)
@@ -127,7 +104,22 @@ func main() {
 	fmt.Println(string(formatted))
 }
 
-func parseFlags() (excludeMethods string, typeName string) {
+func getFilesInDirectory() ([]string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("error getting current working directory: %v", err)
+	}
+
+	files, err := filepath.Glob(wd + "/*.go")
+	if err != nil {
+		return nil, fmt.Errorf("error finding go files: %v", err)
+	}
+
+	return files, err
+}
+
+func parseFlags() (typeName string, excludeMap map[string]bool) {
+	var excludeMethods string
 	flag.StringVar(&excludeMethods, "exclude-methods", "", "Comma-separated list of method names to exclude from decoration")
 	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
 	flag.Parse()
@@ -135,7 +127,7 @@ func parseFlags() (excludeMethods string, typeName string) {
 	if typeName == "" {
 		log.Fatal("usage: custom-decorator --type <type> [--exclude-methods <method1,method2>]")
 	}
-	return excludeMethods, typeName
+	return typeName, createExcludeMap(excludeMethods)
 }
 
 func toSlice(m map[string]struct{}) (slice []string) {
@@ -174,30 +166,6 @@ func findStructDeclaration(fileNode ast.Node, typeName string) *ast.GenDecl {
 		return true
 	})
 	return structDecl
-}
-
-func signature(fields *ast.FieldList) string {
-	var params []string
-	for _, param := range fields.List {
-		if len(param.Names) > 0 {
-			paramName := param.Names[0].Name
-			paramType := param.Type.(*ast.Ident).Name
-			params = append(params, fmt.Sprintf("%s %s", paramName, paramType))
-		} else {
-			params = append(params, param.Type.(*ast.Ident).Name)
-		}
-	}
-	return strings.Join(params, ", ")
-}
-
-func signatureParamNames(fields *ast.FieldList) string {
-	var paramNames []string
-	for _, param := range fields.List {
-		if len(param.Names) > 0 {
-			paramNames = append(paramNames, param.Names[0].Name)
-		}
-	}
-	return strings.Join(paramNames, ", ")
 }
 
 func findMethods(fileNode ast.Node, structName string, excludeMap map[string]bool) ([]method, []string) {
@@ -285,21 +253,6 @@ func fieldNamesWithTypeAssertions(fields []*ast.Field) string {
 	}
 
 	return strings.Join(namesWithTypeAssertions, ", ")
-}
-
-func findConstructor(fileNode ast.Node, constructorName string) *ast.FuncDecl {
-	var constructorFunc *ast.FuncDecl
-
-	ast.Inspect(fileNode, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != constructorName {
-			return true
-		}
-		constructorFunc = funcDecl
-		return false
-	})
-
-	return constructorFunc
 }
 
 func isExported(name string) bool {
@@ -419,7 +372,7 @@ func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}}
 
 	callOriginal := func(args []any) []any {
-		{{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := d.original.{{.Name}}({{.ParamNamesWithTypeAssertions}}){{end}};
+		{{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.original.{{.Name}}({{.ParamNamesWithTypeAssertions}});
 		return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
 	};
 
