@@ -169,8 +169,7 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 
 	ast.Inspect(fileNode, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
-		// TODO  || !isExported(funcDecl.Name.Name)
-		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || excludeMap[funcDecl.Name.Name] {
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || excludeMap[funcDecl.Name.Name] || !isExported(funcDecl.Name.Name) {
 			return true
 		}
 

@@ -50,22 +50,6 @@ func (d *MyServiceDecorator) MyContextMethod(ctx context.Context) {
 	d.advice(methodInfo, args, proxiedFunc)
 }
 
-func (d *MyServiceDecorator) myUnexportedMethod() error {
-	methodInfo := MyServiceMethodInfo{
-		methodName: "myUnexportedMethod",
-		typeName:   "MyService",
-	}
-
-	var args []any
-
-	proxiedFunc := func(args []any) []any {
-		result0 := d.original.myUnexportedMethod()
-		return []any{result0}
-	}
-	results := d.advice(methodInfo, args, proxiedFunc)
-	return results[0].(error)
-}
-
 func (d *MyServiceDecorator) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyFuncReturnsError",
