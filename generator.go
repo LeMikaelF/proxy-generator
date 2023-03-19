@@ -24,6 +24,8 @@ type method struct {
 	ParamNames                   string
 	ParamNamesWithTypeAssertions string
 	ResultTypes                  []string
+	ParamTypes                   []*ast.Field
+	ResultExprs                  []*ast.Field
 }
 
 type data struct {
@@ -38,15 +40,7 @@ type data struct {
 }
 
 func main() {
-	var excludeMethods string
-	var typeName string
-	flag.StringVar(&excludeMethods, "exclude-methods", "", "Comma-separated list of method names to exclude from decoration")
-	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
-	flag.Parse()
-
-	if typeName == "" {
-		log.Fatal("usage: custom-decorator --type <type> [--exclude-methods <method1,method2>]")
-	}
+	excludeMethods, typeName := parseFlags()
 
 	if !isExported(typeName) {
 		log.Fatalf("type is unexported")
@@ -71,6 +65,7 @@ func main() {
 	var packageName string
 
 	var constructorName, constructorArgs, constructorArgNames string
+	imports := make(map[string]struct{})
 
 	for _, file := range files {
 		fileNode, err := parser.ParseFile(fset, file, nil, parser.AllErrors)
@@ -84,9 +79,14 @@ func main() {
 			packageName = fileNode.Name.Name
 		}
 
-		methods = append(methods, findMethods(fileNode, typeName, excludeMap)...)
+		newMethods, newImports := findMethods(fileNode, typeName, excludeMap)
+		methods = append(methods, newMethods...)
+		for _, newImport := range newImports {
+			imports[newImport] = struct{}{}
+		}
 
 		constructorName = "New" + typeName
+		// TODO is still necessary?
 		constructorFunc := findConstructor(fileNode, constructorName)
 
 		if constructorFunc != nil {
@@ -99,6 +99,7 @@ func main() {
 		log.Fatalf("could not find struct declaration with name %s", typeName)
 	}
 
+	//TODO remove Funcs
 	tmpl := template.Must(template.New("decorator").Funcs(map[string]any{
 		"add": func(a, b int) int { return a + b },
 	}).Parse(decoratorTemplate))
@@ -109,7 +110,7 @@ func main() {
 		StructName:          typeName,
 		DecoratorName:       typeName + "Decorator",
 		Methods:             methods,
-		Imports:             getImportsForMethods(methods),
+		Imports:             toSlice(imports),
 		ConstructorName:     constructorName,
 		ConstructorArgs:     constructorArgs,
 		ConstructorArgNames: constructorArgNames,
@@ -124,6 +125,24 @@ func main() {
 	}
 
 	fmt.Println(string(formatted))
+}
+
+func parseFlags() (excludeMethods string, typeName string) {
+	flag.StringVar(&excludeMethods, "exclude-methods", "", "Comma-separated list of method names to exclude from decoration")
+	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
+	flag.Parse()
+
+	if typeName == "" {
+		log.Fatal("usage: custom-decorator --type <type> [--exclude-methods <method1,method2>]")
+	}
+	return excludeMethods, typeName
+}
+
+func toSlice(m map[string]struct{}) (slice []string) {
+	for k := range m {
+		slice = append(slice, k)
+	}
+	return slice
 }
 
 func createExcludeMap(excludeMethods string) map[string]bool {
@@ -181,8 +200,9 @@ func signatureParamNames(fields *ast.FieldList) string {
 	return strings.Join(paramNames, ", ")
 }
 
-func findMethods(fileNode ast.Node, structName string, excludeMap map[string]bool) []method {
+func findMethods(fileNode ast.Node, structName string, excludeMap map[string]bool) ([]method, []string) {
 	var methods []method
+	imports := make(map[string]struct{})
 
 	ast.Inspect(fileNode, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
@@ -210,18 +230,48 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 			m.Params = fieldsString(funcDecl.Type.Params.List)
 			m.ParamNames = fieldNamesCommaDelimited(funcDecl.Type.Params.List)
 			m.ParamNamesWithTypeAssertions = fieldNamesWithTypeAssertions(funcDecl.Type.Params.List)
+			m.ParamTypes = funcDecl.Type.Params.List
 		}
 
 		if funcDecl.Type.Results != nil {
 			m.Results = returnValuesString(funcDecl.Type.Results.List)
 			m.ResultTypes = typeNames(funcDecl.Type.Results.List)
+			m.ResultExprs = funcDecl.Type.Results.List
 		}
 
 		methods = append(methods, m)
+
+		// Collect required imports
+		findImportsInMethods([]method{m}, imports)
+
 		return true
 	})
 
-	return methods
+	importsList := make([]string, 0, len(imports))
+	for k := range imports {
+		importsList = append(importsList, k)
+	}
+
+	return methods, importsList
+}
+
+func findImportsInMethods(methods []method, imports map[string]struct{}) {
+	for _, m := range methods {
+		for _, p := range m.ParamTypes {
+			addImportForType(imports, p.Type)
+		}
+		for _, r := range m.ResultExprs {
+			addImportForType(imports, r.Type)
+		}
+	}
+}
+
+func addImportForType(imports map[string]struct{}, expr ast.Expr) {
+	if se, ok := (expr).(*ast.SelectorExpr); ok {
+		if id, ok := se.X.(*ast.Ident); ok {
+			imports[id.Name] = struct{}{}
+		}
+	}
 }
 
 func fieldNamesWithTypeAssertions(fields []*ast.Field) string {
@@ -250,16 +300,6 @@ func findConstructor(fileNode ast.Node, constructorName string) *ast.FuncDecl {
 	})
 
 	return constructorFunc
-}
-
-func getImportsForMethods(methods []method) []string {
-	imports := []string{"context", "fmt"}
-	for _, m := range methods {
-		if strings.Contains(m.Results, "error") {
-			return imports
-		}
-	}
-	return imports[:1]
 }
 
 func isExported(name string) bool {
@@ -331,7 +371,8 @@ func fieldNames(fields []*ast.Field) []string {
 }
 
 func names(idents []*ast.Ident) []string {
-	var parts []string
+	parts := make([]string, 0, len(idents))
+
 	for _, ident := range idents {
 		parts = append(parts, ident.Name)
 	}
@@ -339,7 +380,7 @@ func names(idents []*ast.Ident) []string {
 }
 
 func typeNames(idents []*ast.Field) []string {
-	var typeNames []string
+	typeNames := make([]string, 0, len(idents))
 
 	for _, ident := range idents {
 		typeNames = append(typeNames, typeName(ident.Type))

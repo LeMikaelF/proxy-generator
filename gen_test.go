@@ -8,6 +8,8 @@ import (
 
 func Test_MyStuff(_ *testing.T) {
 	decorator := NewMyServiceDecorator(NewMyService("a", "b"), func(info MyServiceMethodInfo, args []any, fn func([]any) []any) []any {
+		fmt.Printf("In method %s\n", info.methodName)
+
 		retVals := fn(args)
 		var delegateError error
 
@@ -28,7 +30,6 @@ func Test_MyStuff(_ *testing.T) {
 		}
 		return retVals
 	})
-	fmt.Println("ici")
 	decorator.MyDecoratedMethod()
 	decorator.MyContextMethod(context.Background())
 }
