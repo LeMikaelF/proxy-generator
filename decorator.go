@@ -13,6 +13,7 @@ type MyServiceDecorator struct {
 
 type MyServiceMethodInfo struct {
 	methodName string
+	typeName   string
 }
 
 func (m *MyServiceMethodInfo) MethodName() string {
@@ -22,58 +23,62 @@ func (m *MyServiceMethodInfo) MethodName() string {
 func (d *MyServiceDecorator) MyDecoratedMethod() {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyDecoratedMethod",
+		typeName:   "MyService",
 	}
 
 	var args []any
 
-	callOriginal := func(args []any) []any {
+	proxiedFunc := func(args []any) []any {
 		d.original.MyDecoratedMethod()
 		return []any{}
 	}
-	d.advice(methodInfo, args, callOriginal)
+	d.advice(methodInfo, args, proxiedFunc)
 }
 
 func (d *MyServiceDecorator) MyContextMethod(ctx context.Context) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyContextMethod",
+		typeName:   "MyService",
 	}
 
 	var args []any = []any{ctx}
 
-	callOriginal := func(args []any) []any {
+	proxiedFunc := func(args []any) []any {
 		d.original.MyContextMethod(args[0].(context.Context))
 		return []any{}
 	}
-	d.advice(methodInfo, args, callOriginal)
+	d.advice(methodInfo, args, proxiedFunc)
 }
 
 func (d *MyServiceDecorator) myUnexportedMethod() error {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "myUnexportedMethod",
+		typeName:   "MyService",
 	}
 
 	var args []any
 
-	callOriginal := func(args []any) []any {
+	proxiedFunc := func(args []any) []any {
 		result0 := d.original.myUnexportedMethod()
 		return []any{result0}
 	}
-	results := d.advice(methodInfo, args, callOriginal)
+	results := d.advice(methodInfo, args, proxiedFunc)
 	return results[0].(error)
 }
 
 func (d *MyServiceDecorator) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyFuncReturnsError",
+		typeName:   "MyService",
 	}
 
 	var args []any = []any{ctx, myType}
 
-	callOriginal := func(args []any) []any {
+	proxiedFunc := func(args []any) []any {
 		result0, result1 := d.original.MyFuncReturnsError(args[0].(context.Context), args[1].(myUnexportedType))
 		return []any{result0, result1}
 	}
-	results := d.advice(methodInfo, args, callOriginal)
+	results := d.advice(methodInfo, args, proxiedFunc)
 	return results[0].(string), results[1].(error)
 }
 

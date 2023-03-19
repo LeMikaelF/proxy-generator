@@ -357,6 +357,7 @@ type {{.DecoratorName}} struct {
 
 type {{.StructName}}MethodInfo struct {
 	methodName string
+    typeName string
 }
 
 func (m *{{.StructName}}MethodInfo) MethodName() string {
@@ -367,17 +368,18 @@ func (m *{{.StructName}}MethodInfo) MethodName() string {
 func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	methodInfo := {{$.StructName}}MethodInfo{
 		methodName: "{{.Name}}",
+        typeName: "{{$.StructName}}",
 	};
 
 	var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}}
 
-	callOriginal := func(args []any) []any {
+	proxiedFunc := func(args []any) []any {
 		{{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.original.{{.Name}}({{.ParamNamesWithTypeAssertions}});
 		return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
 	};
 
-	{{- if .Results}}results := d.advice(methodInfo, args, callOriginal);
-	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}}d.advice(methodInfo, args, callOriginal){{end}}}
+	{{- if .Results}}results := d.advice(methodInfo, args, proxiedFunc);
+	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}}d.advice(methodInfo, args, proxiedFunc){{end}}}
 {{end}}
 
 
