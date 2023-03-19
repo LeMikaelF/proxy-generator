@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -35,6 +36,9 @@ type data struct {
 	Methods       []method
 	Imports       []string
 }
+
+//go:embed proxy.tmpl
+var decoratorTemplate string
 
 func main() {
 	typeName, excludedMethods := parseFlags()
@@ -77,16 +81,15 @@ func main() {
 		log.Fatalf("could not find struct declaration with name %s", typeName)
 	}
 
-	tmpl := template.Must(template.New("decorator").Parse(decoratorTemplate))
-
 	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, data{
-		PackageName:   packageName,
-		StructName:    typeName,
-		DecoratorName: typeName + "Decorator",
-		Methods:       methods,
-		Imports:       toSlice(imports),
-	})
+	err = template.Must(template.New("decorator").Parse(decoratorTemplate)).
+		Execute(&buf, data{
+			PackageName:   packageName,
+			StructName:    typeName,
+			DecoratorName: typeName + "Decorator",
+			Methods:       methods,
+			Imports:       toSlice(imports),
+		})
 	if err != nil {
 		log.Fatalf("error executing template: %v", err)
 	}
@@ -173,58 +176,71 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 			return true
 		}
 
-		recvType := funcDecl.Recv.List[0].Type
-		starExpr, isStar := recvType.(*ast.StarExpr)
-		if isStar {
-			recvType = starExpr.X
-		}
+		recvType := getRecvType(funcDecl)
 
 		ident, ok := recvType.(*ast.Ident)
 		if !ok || ident.Name != structName {
 			return true
 		}
 
-		m := method{
-			Name: funcDecl.Name.Name,
-		}
-
-		if funcDecl.Type.Params != nil {
-			m.Params = fieldsString(funcDecl.Type.Params.List)
-			m.ParamNames = fieldNamesCommaDelimited(funcDecl.Type.Params.List)
-			m.ParamNamesWithTypeAssertions = fieldNamesWithTypeAssertions(funcDecl.Type.Params.List)
-			m.ParamTypes = funcDecl.Type.Params.List
-		}
-
-		if funcDecl.Type.Results != nil {
-			m.Results = returnValuesString(funcDecl.Type.Results.List)
-			m.ResultTypes = typeNames(funcDecl.Type.Results.List)
-			m.ResultExprs = funcDecl.Type.Results.List
-		}
-
+		m := method{}
+		populateName(&m, funcDecl)
+		populateParameters(&m, funcDecl)
+		populateResults(&m, funcDecl)
 		methods = append(methods, m)
 
-		// Collect required imports
-		findImportsInMethods([]method{m}, imports)
+		populateImports(imports, m)
 
 		return true
 	})
 
+	return methods, mapToSlice(imports)
+}
+
+func mapToSlice(imports map[string]struct{}) []string {
 	importsList := make([]string, 0, len(imports))
 	for k := range imports {
 		importsList = append(importsList, k)
 	}
-
-	return methods, importsList
+	return importsList
 }
 
-func findImportsInMethods(methods []method, imports map[string]struct{}) {
-	for _, m := range methods {
-		for _, p := range m.ParamTypes {
-			addImportForType(imports, p.Type)
-		}
-		for _, r := range m.ResultExprs {
-			addImportForType(imports, r.Type)
-		}
+func populateName(m *method, funcDecl *ast.FuncDecl) {
+	m.Name = funcDecl.Name.Name
+}
+
+func populateParameters(m *method, funcDecl *ast.FuncDecl) {
+	if funcDecl.Type.Params != nil {
+		m.Params = parameterStrings(funcDecl.Type.Params.List)
+		m.ParamNames = fieldNamesCommaDelimited(funcDecl.Type.Params.List)
+		m.ParamNamesWithTypeAssertions = fieldNamesWithTypeAssertions(funcDecl.Type.Params.List)
+		m.ParamTypes = funcDecl.Type.Params.List
+	}
+}
+
+func populateResults(m *method, funcDecl *ast.FuncDecl) {
+	if funcDecl.Type.Results != nil {
+		m.Results = returnParametersString(funcDecl.Type.Results.List)
+		m.ResultTypes = typeNames(funcDecl.Type.Results.List)
+		m.ResultExprs = funcDecl.Type.Results.List
+	}
+}
+
+func getRecvType(funcDecl *ast.FuncDecl) ast.Expr {
+	recvType := funcDecl.Recv.List[0].Type
+	starExpr, isStar := recvType.(*ast.StarExpr)
+	if isStar {
+		recvType = starExpr.X
+	}
+	return recvType
+}
+
+func populateImports(imports map[string]struct{}, m method) {
+	for _, p := range m.ParamTypes {
+		addImportForType(imports, p.Type)
+	}
+	for _, r := range m.ResultExprs {
+		addImportForType(imports, r.Type)
 	}
 }
 
@@ -271,7 +287,7 @@ func typeName(expr ast.Expr) string {
 	case *ast.ChanType:
 		return "chan " + typeName(t.Value)
 	default:
-		return fmt.Sprintf("unknown(%T)", t)
+		panic(fmt.Sprintf("could not infer name for type %T", t))
 	}
 }
 
@@ -279,16 +295,16 @@ func getTypeString(expr ast.Expr) string {
 	return typeName(expr)
 }
 
-func fieldsString(fields []*ast.Field) string {
-	var parts []string
+func parameterStrings(fields []*ast.Field) string {
+	parts := make([]string, 0, len(fields))
 	for _, field := range fields {
 		parts = append(parts, fmt.Sprintf("%s %s", strings.Join(names(field.Names), " "), getTypeString(field.Type)))
 	}
 	return strings.Join(parts, ", ")
 }
 
-func returnValuesString(fields []*ast.Field) string {
-	var parts []string
+func returnParametersString(fields []*ast.Field) string {
+	parts := make([]string, 0, len(fields))
 	for _, field := range fields {
 		parts = append(parts, fmt.Sprintf("%s %s", strings.Join(names(field.Names), " "), getTypeString(field.Type)))
 	}
@@ -335,61 +351,3 @@ func typeNames(idents []*ast.Field) []string {
 
 	return typeNames
 }
-
-const decoratorTemplate = `package {{.PackageName}}
-
-// Code generated by Mikaël's proxy generator. DO NOT EDIT.
-
-{{if .Imports}}import ({{range .Imports}}
-	"{{.}}"{{end}}
-){{end}}
-
-type {{.DecoratorName}} struct {
-	original *{{.StructName}}
-	advice   func({{.StructName}}MethodInfo, []any, func([]any) []any) []any
-}
-
-type {{.StructName}}MethodInfo struct {
-	methodName string
-    typeName string
-}
-
-func (m *{{.StructName}}MethodInfo) MethodName() string {
-	return m.methodName
-}
-
-{{range .Methods}}
-func (d *{{$.DecoratorName}}) {{.Name}}({{.Params}}) {{.Results}} {
-	methodInfo := {{$.StructName}}MethodInfo{
-		methodName: "{{.Name}}",
-        typeName: "{{$.StructName}}",
-	};
-
-	var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}}
-
-	proxiedFunc := func(args []any) []any {
-		{{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.original.{{.Name}}({{.ParamNamesWithTypeAssertions}});
-		return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
-	};
-
-	{{- if .Results}}results := d.advice(methodInfo, args, proxiedFunc);
-	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}}d.advice(methodInfo, args, proxiedFunc){{end}}}
-{{end}}
-
-
-
-
-
-func New{{.DecoratorName}}(delegate *{{.StructName}}, advice func(methodInfo {{.StructName}}MethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *{{.DecoratorName}} {
-	if advice == nil {
-		advice = func(info {{.StructName}}MethodInfo, args []any, proxiedFunc func([]any) []any) []any {
-			return proxiedFunc(args)
-		}
-	}
-
-	return &{{.DecoratorName}}{
-		original: delegate,
-		advice:   advice,
-	}
-}
-`
