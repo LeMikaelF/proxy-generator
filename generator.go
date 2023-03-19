@@ -72,7 +72,6 @@ func main() {
 		for _, newImport := range newImports {
 			imports[newImport] = struct{}{}
 		}
-
 	}
 
 	if structDecl == nil {
