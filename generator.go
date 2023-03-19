@@ -123,7 +123,7 @@ func parseFlags() (typeName string, excludedMethods map[string]bool) {
 	flag.Parse()
 
 	if typeName == "" {
-		log.Fatal("usage: custom-proxy --type <type> [--exclude-methods <method1,method2>]")
+		log.Fatal("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--exclude-methods <method1,method2>]")
 	}
 	return typeName, csvToMap(excludeMethods)
 }
