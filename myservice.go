@@ -25,8 +25,8 @@ func (s *MyService) myUnexportedMethod() error {
 	return nil
 }
 
-func (s *MyService) MyFuncReturnsError(ctx context.Context, myType myType) (string, error) {
+func (s *MyService) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
 	return "", errors.New("grosse erreur")
 }
 
-type myType struct{}
+type myUnexportedType struct{}
