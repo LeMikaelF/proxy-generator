@@ -37,7 +37,7 @@ type data struct {
 }
 
 func main() {
-	typeName, excludeMap := parseFlags()
+	typeName, excludedMethods := parseFlags()
 	if !isExported(typeName) {
 		log.Fatalf("type is unexported")
 	}
@@ -52,7 +52,6 @@ func main() {
 	var structDecl *ast.GenDecl
 	var methods []method
 	var packageName string
-
 	imports := make(map[string]struct{})
 
 	for _, file := range files {
@@ -67,7 +66,7 @@ func main() {
 			packageName = fileNode.Name.Name
 		}
 
-		newMethods, newImports := findMethods(fileNode, typeName, excludeMap)
+		newMethods, newImports := findMethods(fileNode, typeName, excludedMethods)
 		methods = append(methods, newMethods...)
 		for _, newImport := range newImports {
 			imports[newImport] = struct{}{}
@@ -114,7 +113,7 @@ func getFilesInDirectory() ([]string, error) {
 	return files, nil
 }
 
-func parseFlags() (typeName string, excludeMap map[string]bool) {
+func parseFlags() (typeName string, excludedMethods map[string]bool) {
 	var excludeMethods string
 	flag.StringVar(&excludeMethods, "exclude-methods", "", "Comma-separated list of method names to exclude from decoration")
 	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
@@ -123,17 +122,10 @@ func parseFlags() (typeName string, excludeMap map[string]bool) {
 	if typeName == "" {
 		log.Fatal("usage: custom-decorator --type <type> [--exclude-methods <method1,method2>]")
 	}
-	return typeName, createExcludeMap(excludeMethods)
+	return typeName, csvToMap(excludeMethods)
 }
 
-func toSlice(m map[string]struct{}) (slice []string) {
-	for k := range m {
-		slice = append(slice, k)
-	}
-	return slice
-}
-
-func createExcludeMap(excludeMethods string) map[string]bool {
+func csvToMap(excludeMethods string) map[string]bool {
 	excludeMap := map[string]bool{}
 	if excludeMethods != "" {
 		excludeList := strings.Split(excludeMethods, ",")
@@ -142,6 +134,13 @@ func createExcludeMap(excludeMethods string) map[string]bool {
 		}
 	}
 	return excludeMap
+}
+
+func toSlice(m map[string]struct{}) (slice []string) {
+	for k := range m {
+		slice = append(slice, k)
+	}
+	return slice
 }
 
 func findStructDeclaration(fileNode ast.Node, typeName string) *ast.GenDecl {
