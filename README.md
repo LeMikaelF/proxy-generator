@@ -13,7 +13,7 @@ advice := func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args
 }
 proxy := NewMyServiceProxy(myService, advice)
 ```
-The proxy has the same method set as the proxied type, and can therefore be used interchangeably with it.
+The proxy implements all the exported methods from the proxied type.
 
 The type of first argument that the advice receives has a method set that clients can use to implement an interface in their proxies. For example:
 
