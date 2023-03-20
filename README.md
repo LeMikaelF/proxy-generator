@@ -13,7 +13,7 @@ advice := func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args
 }
 proxy := NewMyServiceProxy(myService, advice)
 ```
-The proxy implements all the exported methods from the proxied type.
+The proxy implements all the exported methods from the proxied type. All method invocations will be delegated to the provided `advice`, similar to an `@Around` aspect in AspectJ.
 
 The type of first argument that the advice receives has a method set that clients can use to implement an interface in their proxies. For example:
 
