@@ -66,7 +66,7 @@ func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexpo
 	return results[0].(string), results[1].(error)
 }
 
-func NewMyServiceProxy(delegate *MyService, advice func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *MyServiceProxy {
+func NewMyServiceProxy(delegate *MyService, advice func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any)) *MyServiceProxy {
 	if advice == nil {
 		advice = func(info MyServiceMethodInfo, args []any, proxiedFunc func([]any) []any) []any {
 			return proxiedFunc(args)
