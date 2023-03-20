@@ -42,10 +42,6 @@ func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}}d.advice(methodInfo, args, proxiedFunc){{end}}}
 {{end}}
 
-
-
-
-
 func New{{.ProxyName}}(delegate *{{.StructName}}, advice func(methodInfo {{.StructName}}MethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any)) *{{.ProxyName}} {
 	if advice == nil {
 		advice = func(info {{.StructName}}MethodInfo, args []any, proxiedFunc func([]any) []any) []any {
