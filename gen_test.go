@@ -7,10 +7,10 @@ import (
 )
 
 func Test_MyStuff(_ *testing.T) {
-	proxy := NewMyServiceProxy(NewMyService("a", "b"), func(info MyServiceMethodInfo, args []any, fn func([]any) []any) []any {
-		fmt.Printf("In method %s\n", info.methodName)
+	proxy := NewMyServiceProxy(NewMyService("a", "b"), func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any) {
+		fmt.Printf("In method %s\n", methodInfo.MethodName())
 
-		retVals := fn(args)
+		retVals = proxiedFunc(args)
 		var delegateError error
 
 		if len(retVals) == 1 {
@@ -30,6 +30,7 @@ func Test_MyStuff(_ *testing.T) {
 		}
 		return retVals
 	})
+
 	proxy.MyDecoratedMethod()
 	proxy.MyContextMethod(context.Background())
 }

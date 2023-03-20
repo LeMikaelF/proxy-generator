@@ -42,7 +42,7 @@ func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 
 
 
-func New{{.ProxyName}}(delegate *{{.StructName}}, advice func(methodInfo {{.StructName}}MethodInfo, args []any, proxiedFunc func(args []any) (retVal []any)) (retVal []any)) *{{.ProxyName}} {
+func New{{.ProxyName}}(delegate *{{.StructName}}, advice func(methodInfo {{.StructName}}MethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any)) *{{.ProxyName}} {
 	if advice == nil {
 		advice = func(info {{.StructName}}MethodInfo, args []any, proxiedFunc func([]any) []any) []any {
 			return proxiedFunc(args)
