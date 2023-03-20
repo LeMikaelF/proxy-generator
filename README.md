@@ -5,13 +5,13 @@ Below is an example of implementing a proxy over an existing type:
 
 ```go
 myService := NewMyService("field1", "field2")
-aspect := func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any) {
+advice := func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any) {
 	// here you can inspect and modify arguments before calling proxiedFunc
 	returnValues := proxiedFunc(args)
 	// here you can inspect and modify return values
 	return returnValues
 }
-proxy := NewMyServiceProxy(myService, aspect)
+proxy := NewMyServiceProxy(myService, advice)
 ```
 The proxy has the same method set as the proxied type, and can therefore be used interchangeably with it.
 
