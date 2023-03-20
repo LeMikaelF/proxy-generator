@@ -20,6 +20,10 @@ func (m *{{.StructName}}MethodInfo) MethodName() string {
 	return m.methodName
 }
 
+func (m *{{.StructName}}MethodInfo) TypeName() string {
+	return m.typeName
+}
+
 {{range .Methods}}
 func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	methodInfo := {{$.StructName}}MethodInfo{

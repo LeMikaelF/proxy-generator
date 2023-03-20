@@ -20,6 +20,10 @@ func (m *MyServiceMethodInfo) MethodName() string {
 	return m.methodName
 }
 
+func (m *MyServiceMethodInfo) TypeName() string {
+	return m.typeName
+}
+
 func (d *MyServiceProxy) MyDecoratedMethod() {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyDecoratedMethod",
