@@ -15,7 +15,7 @@ proxy := NewMyServiceProxy(myService, advice)
 ```
 The proxy has the same method set as the proxied type, and can therefore be used interchangeably with it.
 
-The type of first argument that the proxy receives has a method set that clients can use to implement an interface in their proxies. For example:
+The type of first argument that the advice receives has a method set that clients can use to implement an interface in their proxies. For example:
 
 ```go
 type MethodInfo interface {
