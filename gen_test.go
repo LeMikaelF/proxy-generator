@@ -7,10 +7,11 @@ import (
 )
 
 func Test_MyStuff(_ *testing.T) {
-	proxy := NewMyServiceProxy(NewMyService("a", "b"), func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any) {
-		fmt.Printf("In method %s\n", methodInfo.MethodName())
+	service := NewMyService("a", "b")
+	proxy := NewMyServiceProxy(service, func(method MyServiceMethodInfo, args []any) (retVals []any) {
+		fmt.Printf("In method %s\n", method.MethodName())
 
-		retVals = proxiedFunc(args)
+		retVals = method.Invoke(args)
 		var delegateError error
 
 		if len(retVals) == 1 {

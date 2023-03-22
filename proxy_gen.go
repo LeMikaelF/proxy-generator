@@ -8,12 +8,13 @@ import (
 
 type MyServiceProxy struct {
 	original *MyService
-	advice   func(MyServiceMethodInfo, []any, func([]any) []any) []any
+	advice   func(MyServiceMethodInfo, []any) []any
 }
 
 type MyServiceMethodInfo struct {
 	methodName string
 	typeName   string
+	method     func([]any) []any
 }
 
 func (m *MyServiceMethodInfo) MethodName() string {
@@ -24,56 +25,57 @@ func (m *MyServiceMethodInfo) TypeName() string {
 	return m.typeName
 }
 
+func (m *MyServiceMethodInfo) Invoke(args []any) []any {
+	return m.method(args)
+}
+
 func (d *MyServiceProxy) MyDecoratedMethod() {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyDecoratedMethod",
 		typeName:   "MyService",
+		method: func(args []any) []any {
+			d.original.MyDecoratedMethod()
+			return []any{}
+		},
 	}
 
 	var args []any
-
-	proxiedFunc := func(args []any) []any {
-		d.original.MyDecoratedMethod()
-		return []any{}
-	}
-	d.advice(methodInfo, args, proxiedFunc)
+	d.advice(methodInfo, args)
 }
 
 func (d *MyServiceProxy) MyContextMethod(ctx context.Context) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyContextMethod",
 		typeName:   "MyService",
+		method: func(args []any) []any {
+			d.original.MyContextMethod(args[0].(context.Context))
+			return []any{}
+		},
 	}
 
 	var args []any = []any{ctx}
-
-	proxiedFunc := func(args []any) []any {
-		d.original.MyContextMethod(args[0].(context.Context))
-		return []any{}
-	}
-	d.advice(methodInfo, args, proxiedFunc)
+	d.advice(methodInfo, args)
 }
 
 func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
 	methodInfo := MyServiceMethodInfo{
 		methodName: "MyFuncReturnsError",
 		typeName:   "MyService",
+		method: func(args []any) []any {
+			result0, result1 := d.original.MyFuncReturnsError(args[0].(context.Context), args[1].(myUnexportedType))
+			return []any{result0, result1}
+		},
 	}
 
 	var args []any = []any{ctx, myType}
-
-	proxiedFunc := func(args []any) []any {
-		result0, result1 := d.original.MyFuncReturnsError(args[0].(context.Context), args[1].(myUnexportedType))
-		return []any{result0, result1}
-	}
-	results := d.advice(methodInfo, args, proxiedFunc)
+	results := d.advice(methodInfo, args)
 	return results[0].(string), results[1].(error)
 }
 
-func NewMyServiceProxy(delegate *MyService, advice func(methodInfo MyServiceMethodInfo, args []any, proxiedFunc func(args []any) (retVals []any)) (retVals []any)) *MyServiceProxy {
+func NewMyServiceProxy(delegate *MyService, advice func(method MyServiceMethodInfo, args []any) (retVals []any)) *MyServiceProxy {
 	if advice == nil {
-		advice = func(info MyServiceMethodInfo, args []any, proxiedFunc func([]any) []any) []any {
-			return proxiedFunc(args)
+		advice = func(method MyServiceMethodInfo, args []any) []any {
+			return method.Invoke(args)
 		}
 	}
 
