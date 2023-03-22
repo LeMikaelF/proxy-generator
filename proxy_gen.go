@@ -7,30 +7,34 @@ import (
 )
 
 type MyServiceProxy struct {
-	original *MyService
-	advice   func(MyServiceMethodInfo, []any) []any
+	original          *MyService
+	invocationHandler func(interface {
+		TypeName() string
+		Name() string
+		Invoke(args []any) []any
+	}, []any) []any
 }
 
-type MyServiceMethodInfo struct {
+type MyServiceMethod struct {
 	methodName string
 	typeName   string
 	method     func([]any) []any
 }
 
-func (m *MyServiceMethodInfo) MethodName() string {
+func (m *MyServiceMethod) Name() string {
 	return m.methodName
 }
 
-func (m *MyServiceMethodInfo) TypeName() string {
+func (m *MyServiceMethod) TypeName() string {
 	return m.typeName
 }
 
-func (m *MyServiceMethodInfo) Invoke(args []any) []any {
+func (m *MyServiceMethod) Invoke(args []any) []any {
 	return m.method(args)
 }
 
 func (d *MyServiceProxy) MyDecoratedMethod() {
-	methodInfo := MyServiceMethodInfo{
+	Method := MyServiceMethod{
 		methodName: "MyDecoratedMethod",
 		typeName:   "MyService",
 		method: func(args []any) []any {
@@ -40,11 +44,11 @@ func (d *MyServiceProxy) MyDecoratedMethod() {
 	}
 
 	var args []any
-	d.advice(methodInfo, args)
+	d.invocationHandler(&Method, args)
 }
 
 func (d *MyServiceProxy) MyContextMethod(ctx context.Context) {
-	methodInfo := MyServiceMethodInfo{
+	Method := MyServiceMethod{
 		methodName: "MyContextMethod",
 		typeName:   "MyService",
 		method: func(args []any) []any {
@@ -54,11 +58,11 @@ func (d *MyServiceProxy) MyContextMethod(ctx context.Context) {
 	}
 
 	var args []any = []any{ctx}
-	d.advice(methodInfo, args)
+	d.invocationHandler(&Method, args)
 }
 
 func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
-	methodInfo := MyServiceMethodInfo{
+	Method := MyServiceMethod{
 		methodName: "MyFuncReturnsError",
 		typeName:   "MyService",
 		method: func(args []any) []any {
@@ -68,19 +72,27 @@ func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexpo
 	}
 
 	var args []any = []any{ctx, myType}
-	results := d.advice(methodInfo, args)
+	results := d.invocationHandler(&Method, args)
 	return results[0].(string), results[1].(error)
 }
 
-func NewMyServiceProxy(delegate *MyService, advice func(method MyServiceMethodInfo, args []any) (retVals []any)) *MyServiceProxy {
-	if advice == nil {
-		advice = func(method MyServiceMethodInfo, args []any) []any {
+func NewMyServiceProxy(delegate *MyService, invocationHandler func(method interface {
+	TypeName() string
+	Name() string
+	Invoke(args []any) []any
+}, args []any) (retVals []any)) *MyServiceProxy {
+	if invocationHandler == nil {
+		invocationHandler = func(method interface {
+			TypeName() string
+			Name() string
+			Invoke(args []any) []any
+		}, args []any) []any {
 			return method.Invoke(args)
 		}
 	}
 
 	return &MyServiceProxy{
-		original: delegate,
-		advice:   advice,
+		original:          delegate,
+		invocationHandler: invocationHandler,
 	}
 }

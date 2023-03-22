@@ -8,7 +8,7 @@ package {{.PackageName}}
 
 type {{.ProxyName}} struct {
 	original *{{.StructName}}
-	invocationHandler   func({{.StructName}}Method, []any) []any
+	invocationHandler   func(interface { TypeName() string; Name() string; Invoke(args []any) []any }, []any) []any
 }
 
 type {{.StructName}}Method struct {
@@ -17,7 +17,7 @@ type {{.StructName}}Method struct {
     method func([]any) []any
 }
 
-func (m *{{.StructName}}Method) MethodName() string {
+func (m *{{.StructName}}Method) Name() string {
 	return m.methodName
 }
 
@@ -42,13 +42,13 @@ func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 
 	var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}};
 
-	{{- if .Results}}results := d.invocationHandler(Method, args);
-	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.invocationHandler(Method, args){{end}}}
+	{{- if .Results}}results := d.invocationHandler(&Method, args);
+	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.invocationHandler(&Method, args){{end}}}
 {{end}}
 
-func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method {{.StructName}}Method, args []any) (retVals []any)) *{{.ProxyName}} {
+func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method interface { TypeName() string; Name() string; Invoke(args []any) []any }, args []any) (retVals []any)) *{{.ProxyName}} {
 	if invocationHandler == nil {
-		invocationHandler = func(method {{.StructName}}Method, args []any) []any {
+		invocationHandler = func(method interface { TypeName() string; Name() string; Invoke(args []any) []any }, args []any) []any {
 			return method.Invoke(args)
 		}
 	}

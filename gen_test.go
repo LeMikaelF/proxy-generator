@@ -8,8 +8,12 @@ import (
 
 func Test_MyStuff(_ *testing.T) {
 	service := NewMyService("a", "b")
-	proxy := NewMyServiceProxy(service, func(method MyServiceMethodInfo, args []any) (retVals []any) {
-		fmt.Printf("In method %s\n", method.MethodName())
+	invocationHandler := func(method interface {
+		TypeName() string
+		Name() string
+		Invoke(args []any) []any
+	}, args []any) (retVals []any) {
+		fmt.Printf("In method %s\n", method.Name())
 
 		retVals = method.Invoke(args)
 		var delegateError error
@@ -30,7 +34,9 @@ func Test_MyStuff(_ *testing.T) {
 			fmt.Printf("delegate error was %v\n", delegateError)
 		}
 		return retVals
-	})
+	}
+
+	proxy := NewMyServiceProxy(service, invocationHandler)
 
 	proxy.MyDecoratedMethod()
 	proxy.MyContextMethod(context.Background())
