@@ -8,30 +8,30 @@ package {{.PackageName}}
 
 type {{.ProxyName}} struct {
 	original *{{.StructName}}
-	advice   func({{.StructName}}MethodInfo, []any) []any
+	invocationHandler   func({{.StructName}}Method, []any) []any
 }
 
-type {{.StructName}}MethodInfo struct {
+type {{.StructName}}Method struct {
 	methodName string
     typeName string
     method func([]any) []any
 }
 
-func (m *{{.StructName}}MethodInfo) MethodName() string {
+func (m *{{.StructName}}Method) MethodName() string {
 	return m.methodName
 }
 
-func (m *{{.StructName}}MethodInfo) TypeName() string {
+func (m *{{.StructName}}Method) TypeName() string {
 	return m.typeName
 }
 
-func (m *{{.StructName}}MethodInfo) Invoke(args []any) []any {
+func (m *{{.StructName}}Method) Invoke(args []any) []any {
 	return m.method(args)
 }
 
 {{range .Methods}}
 func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
-	methodInfo := {{$.StructName}}MethodInfo{
+	Method := {{$.StructName}}Method{
 		methodName: "{{.Name}}",
         typeName: "{{$.StructName}}",
 	    method: func(args []any) []any {
@@ -42,19 +42,19 @@ func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 
 	var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}};
 
-	{{- if .Results}}results := d.advice(methodInfo, args);
-	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.advice(methodInfo, args){{end}}}
+	{{- if .Results}}results := d.invocationHandler(Method, args);
+	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.invocationHandler(Method, args){{end}}}
 {{end}}
 
-func New{{.ProxyName}}(delegate *{{.StructName}}, advice func(method {{.StructName}}MethodInfo, args []any) (retVals []any)) *{{.ProxyName}} {
-	if advice == nil {
-		advice = func(method {{.StructName}}MethodInfo, args []any) []any {
+func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method {{.StructName}}Method, args []any) (retVals []any)) *{{.ProxyName}} {
+	if invocationHandler == nil {
+		invocationHandler = func(method {{.StructName}}Method, args []any) []any {
 			return method.Invoke(args)
 		}
 	}
 
 	return &{{.ProxyName}}{
 		original: delegate,
-		advice:   advice,
+		invocationHandler:   invocationHandler,
 	}
 }
