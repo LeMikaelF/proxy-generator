@@ -45,6 +45,7 @@ to implement adapter functions for every type of `NewXxxProxy`.
 - [ ] Add tests
 - [ ] Rename `TypeName` to `Receiver`
 - [ ] Test or disallow usage on interfaces
+- [ ] Bug: Implement methods in --excluded-methods, just don't intercept them.
 
 ## License
 
