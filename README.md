@@ -9,8 +9,9 @@ Below is an example of implementing a proxy over an existing type:
 ```go
 package main
 
-// declare an invocation handler
 func main() {
+
+	// declare an invocation handler 
 	invocationHandler := func(method interface {
 		TypeName() string
 		Name() string
