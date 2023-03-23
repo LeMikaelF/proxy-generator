@@ -18,7 +18,7 @@ func main() {
 		Invoke(args []any) []any
 	}, args []any) (retVals []any) {
 
-		// here you can inspect and modify arguments before calling proxiedFunc
+		// here you can inspect and modify arguments before calling Invoke()
 		returnValues := method.Invoke(args)
 		// here you can inspect and modify return values
 
