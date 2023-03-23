@@ -8,17 +8,18 @@ package {{.PackageName}}
 
 type {{.ProxyName}} struct {
 	original *{{.StructName}}
-	invocationHandler   func(interface { TypeName() string; Name() string; Invoke(args []any) []any }, []any) []any
+	invocationHandler   func(interface { Package() string; Receiver() string; Name() string; Invoke(args []any) []any }, []any) []any
 }
 
 type _{{.StructName}}Method struct {
 	methodName string
+    receiver string
     method func([]any) []any
 }
 
 func (m *_{{.StructName}}Method) Name() string { return m.methodName }
 
-func (m *_{{.StructName}}Method) TypeName() string { return "{{.StructName}}" }
+func (m *_{{.StructName}}Method) Receiver() string { return m.receiver }
 
 func (m *_{{.StructName}}Method) Package() string { return "{{.PackageName}}" }
 
@@ -28,6 +29,7 @@ func (m *_{{.StructName}}Method) Invoke(args []any) []any { return m.method(args
 func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	method := _{{$.StructName}}Method{
 		methodName: "{{.Name}}",
+	    receiver: "{{.Receiver}}",
 	    method: func(args []any) []any {
             {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.original.{{.Name}}({{.ParamNamesWithTypeAssertions}})
             return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
@@ -40,9 +42,9 @@ func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.invocationHandler(&method, args){{end}}}
 {{end}}
 
-func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method interface { TypeName() string; Name() string; Invoke(args []any) []any }, args []any) (retVals []any)) *{{.ProxyName}} {
+func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method interface { Package() string; Receiver() string; Name() string; Invoke(args []any) []any }, args []any) (retVals []any)) *{{.ProxyName}} {
 	if invocationHandler == nil {
-		invocationHandler = func(method interface { TypeName() string; Name() string; Invoke(args []any) []any }, args []any) []any {
+		invocationHandler = func(method interface { Package() string; Receiver() string; Name() string; Invoke(args []any) []any }, args []any) []any {
 			return method.Invoke(args)
 		}
 	}

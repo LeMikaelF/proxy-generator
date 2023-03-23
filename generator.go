@@ -24,6 +24,7 @@ type method struct {
 	Results                      string
 	ParamNames                   string
 	ParamNamesWithTypeAssertions string
+	Receiver                     string
 	ResultTypes                  []string
 	ParamTypes                   []*ast.Field
 	ResultExprs                  []*ast.Field
@@ -61,6 +62,7 @@ func main() {
 	for _, file := range files {
 		fileNode, err := parser.ParseFile(fset, file, nil, parser.AllErrors)
 		if err != nil {
+			//TODO make errors like this fatal.
 			log.Printf("error parsing file %s: %v", file, err)
 			continue
 		}
@@ -108,6 +110,7 @@ func getFilesInDirectory() ([]string, error) {
 		return nil, fmt.Errorf("error getting current working directory: %v", err)
 	}
 
+	//TODO exclude test files
 	files, err := filepath.Glob(wd + "/*.go")
 	if err != nil {
 		return nil, fmt.Errorf("error finding go files: %v", err)
@@ -176,7 +179,7 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 			return true
 		}
 
-		recvType := getRecvType(funcDecl)
+		recvType, hasStar := getReceiver(funcDecl)
 
 		ident, ok := recvType.(*ast.Ident)
 		if !ok || ident.Name != structName {
@@ -185,6 +188,7 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 
 		m := method{}
 		populateName(&m, funcDecl)
+		populateReceiver(&m, ident.Name, hasStar)
 		populateParameters(&m, funcDecl)
 		populateResults(&m, funcDecl)
 		methods = append(methods, m)
@@ -197,6 +201,15 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 	return methods, mapToSlice(imports)
 }
 
+func getReceiver(funcDecl *ast.FuncDecl) (ast.Expr, bool) {
+	recvType := funcDecl.Recv.List[0].Type
+	starExpr, isStar := recvType.(*ast.StarExpr)
+	if isStar {
+		recvType = starExpr.X
+	}
+	return recvType, isStar
+}
+
 func mapToSlice(imports map[string]struct{}) []string {
 	importsList := make([]string, 0, len(imports))
 	for k := range imports {
@@ -207,6 +220,14 @@ func mapToSlice(imports map[string]struct{}) []string {
 
 func populateName(m *method, funcDecl *ast.FuncDecl) {
 	m.Name = funcDecl.Name.Name
+}
+
+func populateReceiver(m *method, receiver string, hasStar bool) {
+	var starPrefix string
+	if hasStar {
+		starPrefix = "*"
+	}
+	m.Receiver = fmt.Sprintf("%s%s", starPrefix, receiver)
 }
 
 func populateParameters(m *method, funcDecl *ast.FuncDecl) {

@@ -19,8 +19,7 @@ func (s *MyService) NoArgsMethod() {}
 
 func (s *MyService) ContextMethod(ctx context.Context) {}
 
-func (s *MyService) unexportedMethod() {
-}
+func (s *MyService) unexportedMethod() {}
 
 func (s *MyService) ExcludedMethod() error {
 	return nil

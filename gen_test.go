@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"git.tmaws.io/mikaelfrancoeur/proxy-generator/tests"
+	"github.com/LeMikaelF/proxy-generator/tests"
 	"testing"
 )
 
 func Test_MyStuff(_ *testing.T) {
 	service := tests.NewMyService("a", "b")
 	invocationHandler := func(method interface {
-		TypeName() string
+		Package() string
+		Receiver() string
 		Name() string
 		Invoke(args []any) []any
 	}, args []any) (retVals []any) {
@@ -39,6 +40,6 @@ func Test_MyStuff(_ *testing.T) {
 
 	proxy := tests.NewMyServiceProxy(service, invocationHandler)
 
-	proxy.MyDecoratedMethod()
-	proxy.MyContextMethod(context.Background())
+	proxy.NoArgsMethod()
+	proxy.ContextMethod(context.Background())
 }
