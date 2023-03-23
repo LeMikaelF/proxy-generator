@@ -44,7 +44,6 @@ to implement adapter functions for every type of `NewXxxProxy`.
 
 - [ ] Write to a file instead of stdout
 - [ ] Add tests
-- [ ] Rename `TypeName` to `Receiver`
 - [ ] Test or disallow usage on interfaces
 - [ ] Bug: Implement methods in --excluded-methods, just don't intercept them.
 
