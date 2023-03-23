@@ -45,7 +45,7 @@ to implement adapter functions for every type of `NewXxxProxy`.
 - [ ] Write to a file instead of stdout
 - [ ] Add tests
 - [ ] Test or disallow usage on interfaces
-- [ ] Bug: Implement methods in --excluded-methods, just don't intercept them.
+- [ ] Proxy all methods, exported and unexported; client can use method.Name() to decide. 
 
 ## License
 
