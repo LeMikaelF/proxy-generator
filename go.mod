@@ -1,3 +1,3 @@
-module git.tmaws.io/mikaelfrancoeur/proxy-generator
+module github.com/LeMikaelF/proxy-generator
 
 go 1.20
