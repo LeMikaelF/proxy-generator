@@ -7,7 +7,7 @@ import (
 )
 
 type MyServiceProxy struct {
-	original          *MyService
+	delegate          *MyService
 	invocationHandler func(method interface {
 		Package() string
 		Receiver() string
@@ -35,7 +35,7 @@ func (d *MyServiceProxy) NoArgsMethod() {
 		methodName: "NoArgsMethod",
 		receiver:   "*MyService",
 		method: func(args []any) []any {
-			d.original.NoArgsMethod()
+			d.delegate.NoArgsMethod()
 			return []any{}
 		},
 	}
@@ -49,7 +49,7 @@ func (d *MyServiceProxy) ContextMethod(ctx context.Context) {
 		methodName: "ContextMethod",
 		receiver:   "*MyService",
 		method: func(args []any) []any {
-			d.original.ContextMethod(args[0].(context.Context))
+			d.delegate.ContextMethod(args[0].(context.Context))
 			return []any{}
 		},
 	}
@@ -63,7 +63,7 @@ func (d *MyServiceProxy) OneArgErrorMethod() error {
 		methodName: "OneArgErrorMethod",
 		receiver:   "*MyService",
 		method: func(args []any) []any {
-			result0 := d.original.OneArgErrorMethod()
+			result0 := d.delegate.OneArgErrorMethod()
 			return []any{result0}
 		},
 	}
@@ -78,7 +78,7 @@ func (d *MyServiceProxy) TwoArgsErrorMethod(ctx context.Context, aStruct Struct)
 		methodName: "TwoArgsErrorMethod",
 		receiver:   "*MyService",
 		method: func(args []any) []any {
-			result0, result1 := d.original.TwoArgsErrorMethod(args[0].(context.Context), args[1].(Struct))
+			result0, result1 := d.delegate.TwoArgsErrorMethod(args[0].(context.Context), args[1].(Struct))
 			return []any{result0, result1}
 		},
 	}
@@ -106,7 +106,7 @@ func NewMyServiceProxy(delegate *MyService, invocationHandler func(method interf
 	}
 
 	return &MyServiceProxy{
-		original:          delegate,
+		delegate:          delegate,
 		invocationHandler: invocationHandler,
 	}
 }

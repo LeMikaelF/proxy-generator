@@ -9,7 +9,7 @@ package {{.PackageName}}
 {{$interfaceDeclaration := "interface { Package() string; Receiver() string; Name() string; Invoke(args []any) []any }"}}
 
 type {{.ProxyName}} struct {
-	original *{{.StructName}}
+	delegate *{{.StructName}}
 	invocationHandler   func(method {{$interfaceDeclaration}}, args []any) []any
 }
 
@@ -33,7 +33,7 @@ func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
 		methodName: "{{.Name}}",
 	    receiver: "{{.Receiver}}",
 	    method: func(args []any) []any {
-            {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.original.{{.Name}}({{.ParamNamesWithTypeAssertions}})
+            {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.delegate.{{.Name}}({{.ParamNamesWithTypeAssertions}})
             return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
         },
 	};
@@ -52,7 +52,7 @@ func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method 
 	}
 
 	return &{{.ProxyName}}{
-		original: delegate,
+		delegate: delegate,
 		invocationHandler:   invocationHandler,
 	}
 }
