@@ -13,8 +13,8 @@ func main() {
 
 	// declare an invocation handler 
 	invocationHandler := func(method interface {
-        Package() string
-        Receiver() string
+		Package() string
+		Receiver() string
 		Name() string
 		Invoke(args []any) []any
 	}, args []any) (retVals []any) {
@@ -45,7 +45,7 @@ to implement adapter functions for every type of `NewXxxProxy`.
 - [ ] Write to a file instead of stdout
 - [ ] Add tests
 - [ ] Test or disallow usage on interfaces
-- [ ] Proxy all methods, exported and unexported; client can use method.Name() to decide. 
+- [ ] Proxy all methods, exported and unexported; client can use method.Name() to decide.
 
 ## License
 
