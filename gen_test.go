@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"git.tmaws.io/mikaelfrancoeur/proxy-generator/tests"
 	"testing"
 )
 
 func Test_MyStuff(_ *testing.T) {
-	service := NewMyService("a", "b")
+	service := tests.NewMyService("a", "b")
 	invocationHandler := func(method interface {
 		TypeName() string
 		Name() string
@@ -36,7 +37,7 @@ func Test_MyStuff(_ *testing.T) {
 		return retVals
 	}
 
-	proxy := NewMyServiceProxy(service, invocationHandler)
+	proxy := tests.NewMyServiceProxy(service, invocationHandler)
 
 	proxy.MyDecoratedMethod()
 	proxy.MyContextMethod(context.Background())
