@@ -8,12 +8,12 @@ import (
 
 type MyServiceProxy struct {
 	original          *MyService
-	invocationHandler func(interface {
+	invocationHandler func(method interface {
 		Package() string
 		Receiver() string
 		Name() string
 		Invoke(args []any) []any
-	}, []any) []any
+	}, args []any) []any
 }
 
 type _MyServiceMethod struct {
