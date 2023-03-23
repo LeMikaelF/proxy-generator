@@ -13,7 +13,8 @@ func main() {
 
 	// declare an invocation handler 
 	invocationHandler := func(method interface {
-		TypeName() string
+        Package() string
+        Receiver() string
 		Name() string
 		Invoke(args []any) []any
 	}, args []any) (retVals []any) {
