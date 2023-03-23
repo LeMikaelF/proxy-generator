@@ -15,26 +15,26 @@ type MyServiceProxy struct {
 	}, []any) []any
 }
 
-type MyServiceMethod struct {
+type _MyServiceMethod struct {
 	methodName string
 	typeName   string
 	method     func([]any) []any
 }
 
-func (m *MyServiceMethod) Name() string {
+func (m *_MyServiceMethod) Name() string {
 	return m.methodName
 }
 
-func (m *MyServiceMethod) TypeName() string {
+func (m *_MyServiceMethod) TypeName() string {
 	return m.typeName
 }
 
-func (m *MyServiceMethod) Invoke(args []any) []any {
+func (m *_MyServiceMethod) Invoke(args []any) []any {
 	return m.method(args)
 }
 
 func (d *MyServiceProxy) MyDecoratedMethod() {
-	Method := MyServiceMethod{
+	method := _MyServiceMethod{
 		methodName: "MyDecoratedMethod",
 		typeName:   "MyService",
 		method: func(args []any) []any {
@@ -44,11 +44,11 @@ func (d *MyServiceProxy) MyDecoratedMethod() {
 	}
 
 	var args []any
-	d.invocationHandler(&Method, args)
+	d.invocationHandler(&method, args)
 }
 
 func (d *MyServiceProxy) MyContextMethod(ctx context.Context) {
-	Method := MyServiceMethod{
+	method := _MyServiceMethod{
 		methodName: "MyContextMethod",
 		typeName:   "MyService",
 		method: func(args []any) []any {
@@ -58,11 +58,11 @@ func (d *MyServiceProxy) MyContextMethod(ctx context.Context) {
 	}
 
 	var args []any = []any{ctx}
-	d.invocationHandler(&Method, args)
+	d.invocationHandler(&method, args)
 }
 
 func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexportedType) (string, error) {
-	Method := MyServiceMethod{
+	method := _MyServiceMethod{
 		methodName: "MyFuncReturnsError",
 		typeName:   "MyService",
 		method: func(args []any) []any {
@@ -72,7 +72,7 @@ func (d *MyServiceProxy) MyFuncReturnsError(ctx context.Context, myType myUnexpo
 	}
 
 	var args []any = []any{ctx, myType}
-	results := d.invocationHandler(&Method, args)
+	results := d.invocationHandler(&method, args)
 	return results[0].(string), results[1].(error)
 }
 
