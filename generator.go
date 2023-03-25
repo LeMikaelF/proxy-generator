@@ -48,6 +48,8 @@ func main() {
 		log.Fatalf("type is unexported")
 	}
 
+	pkg := os.Getenv("GOPACKAGE")
+
 	files, err := getFilesInDirectory()
 	if err != nil {
 		log.Fatalf("error getting files in working directory: %v", err)
@@ -64,6 +66,10 @@ func main() {
 		fileNode, err := parser.ParseFile(fset, file, nil, parser.AllErrors)
 		if err != nil {
 			log.Fatalf("error parsing file %s: %v", file, err)
+		}
+
+		if fileNode.Name.Name != pkg {
+			continue
 		}
 
 		if structDecl == nil {
@@ -100,7 +106,15 @@ func main() {
 		log.Fatalf("error formatting code: %v", err)
 	}
 
-	fmt.Println(string(formatted))
+	if err := output(typeName, string(formatted)); err != nil {
+		log.Fatalf("error outputting code: %v", err)
+	}
+}
+
+func output(typeName string, generatedCode string) error {
+	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", typeName)
+
+	return os.WriteFile(generatedFileName, []byte(generatedCode), 0666)
 }
 
 func getFilesInDirectory() ([]string, error) {
