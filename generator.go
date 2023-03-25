@@ -29,6 +29,7 @@ type method struct {
 	ResultTypes                  []string
 	ParamTypes                   []*ast.Field
 	ResultExprs                  []*ast.Field
+	Passthrough                  bool
 }
 
 type data struct {
@@ -43,7 +44,7 @@ type data struct {
 var proxyTemplate string
 
 func main() {
-	typeName, excludedMethods := parseFlags()
+	typeName, passthroughMethods := parseFlags()
 
 	pkg := os.Getenv("GOPACKAGE")
 
@@ -74,7 +75,7 @@ func main() {
 			packageName = fileNode.Name.Name
 		}
 
-		newMethods, newImports := findMethods(fileNode, typeName, excludedMethods)
+		newMethods, newImports := findMethods(fileNode, typeName, passthroughMethods)
 		methods = append(methods, newMethods...)
 		for _, newImport := range newImports {
 			imports[newImport] = struct{}{}
@@ -97,7 +98,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("error executing template: %v", err)
 	}
-
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
 		log.Fatalf("error formatting code: %v", err)
@@ -128,27 +128,27 @@ func getFilesInDirectory() ([]string, error) {
 	return files, nil
 }
 
-func parseFlags() (typeName string, excludedMethods map[string]bool) {
-	var excludeMethods string
-	flag.StringVar(&excludeMethods, "exclude-methods", "", "Comma-separated list of method names to exclude from decoration")
+func parseFlags() (typeName string, passthroughMethods map[string]bool) {
+	var excludeMethodsString string
+	flag.StringVar(&excludeMethodsString, "exclude-methods", "", "Comma-separated list of method names to pass through to the delegate, without interception by the invocationHandler.")
 	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
 	flag.Parse()
 
 	if typeName == "" {
-		log.Fatal("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--exclude-methods <method1,method2>]")
+		log.Fatal("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--passthrough-methods <method1,method2>]")
 	}
-	return typeName, csvToMap(excludeMethods)
+	return typeName, csvToMap(excludeMethodsString)
 }
 
-func csvToMap(excludeMethods string) map[string]bool {
-	excludeMap := map[string]bool{}
-	if excludeMethods != "" {
-		excludeList := strings.Split(excludeMethods, ",")
-		for _, m := range excludeList {
-			excludeMap[m] = true
+func csvToMap(csv string) map[string]bool {
+	m := map[string]bool{}
+	if csv != "" {
+		slice := strings.Split(csv, ",")
+		for _, element := range slice {
+			m[element] = true
 		}
 	}
-	return excludeMap
+	return m
 }
 
 func toSlice(m map[string]struct{}) (slice []string) {
@@ -178,14 +178,14 @@ func findStructDeclaration(fileNode ast.Node, typeName string) *ast.GenDecl {
 	return structDecl
 }
 
-func findMethods(fileNode ast.Node, structName string, excludeMap map[string]bool) ([]method, []string) {
+func findMethods(fileNode ast.Node, structName string, passThroughMethods map[string]bool) ([]method, []string) {
 	var methods []method
 	imports := make(map[string]struct{})
 	importMap := collectImports(fileNode)
 
 	ast.Inspect(fileNode, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || excludeMap[funcDecl.Name.Name] || !isExported(funcDecl.Name.Name) {
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || !isExported(funcDecl.Name.Name) {
 			return true
 		}
 
@@ -196,11 +196,7 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 			return true
 		}
 
-		m := method{}
-		populateName(&m, funcDecl)
-		populateReceiver(&m, ident.Name, hasStar)
-		populateParameters(&m, funcDecl)
-		populateResults(&m, funcDecl)
+		m := newMethod(passThroughMethods, funcDecl, ident, hasStar)
 		methods = append(methods, m)
 
 		populateImports(imports, m, importMap)
@@ -209,6 +205,20 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 	})
 
 	return methods, mapToSlice(imports)
+}
+
+func newMethod(passThroughMethods map[string]bool, funcDecl *ast.FuncDecl, ident *ast.Ident, hasStar bool) method {
+	m := method{}
+	populatePassthrough(&m, passThroughMethods[funcDecl.Name.Name])
+	populateName(&m, funcDecl)
+	populateReceiver(&m, ident.Name, hasStar)
+	populateParameters(&m, funcDecl)
+	populateResults(&m, funcDecl)
+	return m
+}
+
+func populatePassthrough(m *method, isPassthrough bool) {
+	m.Passthrough = isPassthrough
 }
 
 type importInfo struct {

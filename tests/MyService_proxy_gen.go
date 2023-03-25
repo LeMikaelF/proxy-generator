@@ -34,6 +34,7 @@ func (m *_MyServiceMethod) Package() string { return "tests" }
 func (m *_MyServiceMethod) Invoke(args []any) []any { return m.method(args) }
 
 func (d *MyServiceProxy) NoArgsMethod() {
+
 	method := _MyServiceMethod{
 		methodName: "NoArgsMethod",
 		receiver:   "*MyService",
@@ -45,9 +46,11 @@ func (d *MyServiceProxy) NoArgsMethod() {
 
 	var args []any
 	d.invocationHandler(&method, args)
+
 }
 
 func (d *MyServiceProxy) ContextMethod(ctx context.Context) {
+
 	method := _MyServiceMethod{
 		methodName: "ContextMethod",
 		receiver:   "*MyService",
@@ -59,9 +62,17 @@ func (d *MyServiceProxy) ContextMethod(ctx context.Context) {
 
 	var args []any = []any{ctx}
 	d.invocationHandler(&method, args)
+
+}
+
+func (d *MyServiceProxy) PassthroughMethod() error {
+
+	return d.delegate.PassthroughMethod()
+
 }
 
 func (d *MyServiceProxy) OneArgErrorMethod() error {
+
 	method := _MyServiceMethod{
 		methodName: "OneArgErrorMethod",
 		receiver:   "*MyService",
@@ -74,9 +85,11 @@ func (d *MyServiceProxy) OneArgErrorMethod() error {
 	var args []any
 	results := d.invocationHandler(&method, args)
 	return results[0].(error)
+
 }
 
 func (d *MyServiceProxy) TwoArgsErrorMethod(ctx context.Context, aStruct Struct) (string, error) {
+
 	method := _MyServiceMethod{
 		methodName: "TwoArgsErrorMethod",
 		receiver:   "*MyService",
@@ -89,9 +102,11 @@ func (d *MyServiceProxy) TwoArgsErrorMethod(ctx context.Context, aStruct Struct)
 	var args []any = []any{ctx, aStruct}
 	results := d.invocationHandler(&method, args)
 	return results[0].(string), results[1].(error)
+
 }
 
 func (d *MyServiceProxy) ArgsWithComplexImportPathsAndAlias(a xml.CharData, b constraint.Expr, server alias.ResponseRecorder) {
+
 	method := _MyServiceMethod{
 		methodName: "ArgsWithComplexImportPathsAndAlias",
 		receiver:   "*MyService",
@@ -103,6 +118,7 @@ func (d *MyServiceProxy) ArgsWithComplexImportPathsAndAlias(a xml.CharData, b co
 
 	var args []any = []any{a, b, server}
 	d.invocationHandler(&method, args)
+
 }
 
 func NewMyServiceProxy(delegate *MyService, invocationHandler func(method interface {

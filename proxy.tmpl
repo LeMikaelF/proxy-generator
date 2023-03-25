@@ -29,19 +29,24 @@ func (m *_{{.StructName}}Method) Invoke(args []any) []any { return m.method(args
 
 {{range .Methods}}
 func (d *{{$.ProxyName}}) {{.Name}}({{.Params}}) {{.Results}} {
-	method := _{{$.StructName}}Method{
-		methodName: "{{.Name}}",
-	    receiver: "{{.Receiver}}",
-	    method: func(args []any) []any {
-            {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.delegate.{{.Name}}({{.ParamNamesWithTypeAssertions}})
-            return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
-        },
-	};
+	{{if .Passthrough}}
+		{{if .Results}}return {{end}} d.delegate.{{.Name}}({{.Params}})
+	{{else}}
+		method := _{{$.StructName}}Method{
+			methodName: "{{.Name}}",
+			receiver: "{{.Receiver}}",
+			method: func(args []any) []any {
+				{{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}} := {{end}}d.delegate.{{.Name}}({{.ParamNamesWithTypeAssertions}})
+				return []any{ {{- if .Results}}{{range $index, $_ := .ResultTypes}}{{if $index}},{{end}}result{{$index}}{{end}}{{end}}}
+			},
+		};
 
-	var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}};
+		var args []any{{- if .Params}} = []any{ {{.ParamNames}} }{{end}};
 
-	{{- if .Results}}results := d.invocationHandler(&method, args);
-	return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.invocationHandler(&method, args){{end}}}
+		{{- if .Results}}results := d.invocationHandler(&method, args);
+		return {{- range $index, $element := .ResultTypes}}{{if gt $index 0}}, {{end}} results[{{$index}}].({{$element}}){{end}}{{else}} d.invocationHandler(&method, args){{end}}
+	{{end}}
+}
 {{end}}
 
 func New{{.ProxyName}}(delegate *{{.StructName}}, invocationHandler func(method {{$interfaceDeclaration}}, args []any) (retVals []any)) *{{.ProxyName}} {

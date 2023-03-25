@@ -8,7 +8,7 @@ import (
 	alias "net/http/httptest"
 )
 
-//go:generate go run ../generator.go --type MyService --exclude-methods ExcludedMethod myservice.go
+//go:generate go run ../generator.go --type MyService --exclude-methods PassthroughMethod myservice.go
 type MyService struct {
 	param1 string
 	param2 string
@@ -24,7 +24,7 @@ func (s *MyService) ContextMethod(ctx context.Context) {}
 
 func (s *MyService) unexportedMethod() {}
 
-func (s *MyService) ExcludedMethod() error {
+func (s *MyService) PassthroughMethod() error {
 	return nil
 }
 
