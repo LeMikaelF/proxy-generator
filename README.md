@@ -42,7 +42,6 @@ to implement adapter functions for every type of `NewXxxProxy`.
 
 ## TODO
 
-- [ ] Write to a file instead of stdout
 - [ ] Add tests
 - [ ] Test or disallow usage on interfaces
 - [ ] Proxy all methods, exported and unexported; client can use method.Name() to decide.
