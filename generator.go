@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -172,6 +173,7 @@ func findStructDeclaration(fileNode ast.Node, typeName string) *ast.GenDecl {
 func findMethods(fileNode ast.Node, structName string, excludeMap map[string]bool) ([]method, []string) {
 	var methods []method
 	imports := make(map[string]struct{})
+	importMap := collectImports(fileNode)
 
 	ast.Inspect(fileNode, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
@@ -193,12 +195,43 @@ func findMethods(fileNode ast.Node, structName string, excludeMap map[string]boo
 		populateResults(&m, funcDecl)
 		methods = append(methods, m)
 
-		populateImports(imports, m)
+		populateImports(imports, m, importMap)
 
 		return true
 	})
 
 	return methods, mapToSlice(imports)
+}
+
+type importInfo struct {
+	Path  string
+	Alias string
+}
+
+func collectImports(fileNode ast.Node) map[string]importInfo {
+	importMap := make(map[string]importInfo)
+
+	ast.Inspect(fileNode, func(n ast.Node) bool {
+		importSpec, ok := n.(*ast.ImportSpec)
+		if !ok {
+			return true
+		}
+
+		importPath := strings.Trim(importSpec.Path.Value, "\"")
+
+		alias := ""
+		if importSpec.Name != nil {
+			alias = importSpec.Name.Name
+		} else {
+			_, alias = path.Split(importPath)
+		}
+
+		importMap[alias] = importInfo{Path: importPath, Alias: alias}
+
+		return true
+	})
+
+	return importMap
 }
 
 func getReceiver(funcDecl *ast.FuncDecl) (ast.Expr, bool) {
@@ -247,28 +280,27 @@ func populateResults(m *method, funcDecl *ast.FuncDecl) {
 	}
 }
 
-func getRecvType(funcDecl *ast.FuncDecl) ast.Expr {
-	recvType := funcDecl.Recv.List[0].Type
-	starExpr, isStar := recvType.(*ast.StarExpr)
-	if isStar {
-		recvType = starExpr.X
-	}
-	return recvType
-}
-
-func populateImports(imports map[string]struct{}, m method) {
-	for _, p := range m.ParamTypes {
-		addImportForType(imports, p.Type)
-	}
-	for _, r := range m.ResultExprs {
-		addImportForType(imports, r.Type)
-	}
-}
-
-func addImportForType(imports map[string]struct{}, expr ast.Expr) {
-	if se, ok := (expr).(*ast.SelectorExpr); ok {
-		if id, ok := se.X.(*ast.Ident); ok {
-			imports[id.Name] = struct{}{}
+func populateImports(imports map[string]struct{}, m method, importMap map[string]importInfo) {
+	for _, field := range append(m.ParamTypes, m.ResultExprs...) {
+		switch t := field.Type.(type) {
+		case *ast.Ident:
+			if info, ok := importMap[t.Name]; ok {
+				imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
+			}
+		case *ast.SelectorExpr:
+			if x, ok := t.X.(*ast.Ident); ok {
+				if info, ok := importMap[x.Name]; ok {
+					imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
+				}
+			}
+		case *ast.StarExpr:
+			if se, ok := t.X.(*ast.SelectorExpr); ok {
+				if x, ok := se.X.(*ast.Ident); ok {
+					if info, ok := importMap[x.Name]; ok {
+						imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
+					}
+				}
+			}
 		}
 	}
 }

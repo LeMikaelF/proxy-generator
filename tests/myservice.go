@@ -2,7 +2,10 @@ package tests
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
+	"go/build/constraint"
+	alias "net/http/httptest"
 )
 
 //go:generate go run ../generator.go --type MyService --exclude-methods ExcludedMethod myservice.go
@@ -31,6 +34,9 @@ func (s *MyService) OneArgErrorMethod() error {
 
 func (s *MyService) TwoArgsErrorMethod(ctx context.Context, aStruct Struct) (string, error) {
 	return "", errors.New("grosse erreur")
+}
+
+func (s *MyService) ArgsWithComplexImportPathsAndAlias(a xml.CharData, b constraint.Expr, server alias.ResponseRecorder) {
 }
 
 type Struct struct{}
