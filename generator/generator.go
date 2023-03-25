@@ -1,21 +1,59 @@
-package main
+package generator
 
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"text/template"
 )
+
+type Generator struct {
+	workingDir         string
+	pkg                string
+	typeName           string
+	passthroughMethods map[string]bool
+	outputter          func(generatedCode string) error
+}
+
+func New() (*Generator, error) {
+	typeName, passthroughMethods, err := parseFlags()
+	if err != nil {
+		return nil, err
+	}
+
+	workingDir, err := getWorkingDir()
+	if err != nil {
+		return nil, err
+	}
+
+	g := &Generator{
+		workingDir:         workingDir,
+		pkg:                os.Getenv("GOPACKAGE"),
+		typeName:           typeName,
+		passthroughMethods: passthroughMethods,
+	}
+	g.outputter = g.output
+
+	return g, nil
+}
+
+func getWorkingDir() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("error getting current working directory: %v", err)
+	}
+	return wd, nil
+}
 
 type method struct {
 	Name                         string
@@ -41,14 +79,10 @@ type data struct {
 //go:embed proxy.tmpl
 var proxyTemplate string
 
-func main() {
-	typeName, passthroughMethods := parseFlags()
-
-	pkg := os.Getenv("GOPACKAGE")
-
-	files, err := getFilesInDirectory()
+func (g *Generator) Run() error {
+	files, err := g.getFilesInDirectory()
 	if err != nil {
-		log.Fatalf("error getting files in working directory: %v", err)
+		return fmt.Errorf("error getting files in working directory: %v", err)
 	}
 
 	fset := token.NewFileSet()
@@ -61,19 +95,19 @@ func main() {
 	for _, file := range files {
 		fileNode, err := parser.ParseFile(fset, file, nil, parser.AllErrors)
 		if err != nil {
-			log.Fatalf("error parsing file %s: %v", file, err)
+			return fmt.Errorf("error parsing file %s: %v", file, err)
 		}
 
-		if fileNode.Name.Name != pkg {
+		if fileNode.Name.Name != g.pkg {
 			continue
 		}
 
 		if structDecl == nil {
-			structDecl = findStructDeclaration(fileNode, typeName)
+			structDecl = findStructDeclaration(fileNode, g.typeName)
 			packageName = fileNode.Name.Name
 		}
 
-		newMethods, newImports := findMethods(fileNode, typeName, passthroughMethods)
+		newMethods, newImports := findMethods(fileNode, g.typeName, g.passthroughMethods)
 		methods = append(methods, newMethods...)
 		for _, newImport := range newImports {
 			imports[newImport] = struct{}{}
@@ -81,44 +115,49 @@ func main() {
 	}
 
 	if structDecl == nil {
-		log.Fatalf("could not find struct declaration with name %s", typeName)
+		return fmt.Errorf("could not find struct declaration with name %s", g.typeName)
 	}
 
+	generatedCode, err := g.generateCode(packageName, methods, imports)
+	if err != nil {
+		return err
+	}
+
+	if err := g.outputter(string(generatedCode)); err != nil {
+		return fmt.Errorf("error outputting code: %v", err)
+	}
+
+	return nil
+}
+
+func (g *Generator) generateCode(packageName string, methods []method, imports map[string]struct{}) ([]byte, error) {
 	var buf bytes.Buffer
-	err = template.Must(template.New("proxy").Parse(proxyTemplate)).
+	err := template.Must(template.New("proxy").Parse(proxyTemplate)).
 		Execute(&buf, data{
 			PackageName: packageName,
-			StructName:  typeName,
-			ProxyName:   typeName + "Proxy",
+			StructName:  g.typeName,
+			ProxyName:   g.typeName + "Proxy",
 			Methods:     methods,
 			Imports:     toSlice(imports),
 		})
 	if err != nil {
-		log.Fatalf("error executing template: %v", err)
+		return nil, fmt.Errorf("error executing template: %v", err)
 	}
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
-		log.Fatalf("error formatting code: %v", err)
+		return nil, fmt.Errorf("error formatting code: %v", err)
 	}
-
-	if err := output(typeName, string(formatted)); err != nil {
-		log.Fatalf("error outputting code: %v", err)
-	}
+	return formatted, nil
 }
 
-func output(typeName string, generatedCode string) error {
-	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", typeName)
+func (g *Generator) output(generatedCode string) error {
+	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", g.typeName)
 
 	return os.WriteFile(generatedFileName, []byte(generatedCode), 0666)
 }
 
-func getFilesInDirectory() ([]string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("error getting current working directory: %v", err)
-	}
-
-	files, err := filepath.Glob(wd + "/*.go")
+func (g *Generator) getFilesInDirectory() ([]string, error) {
+	files, err := filepath.Glob(g.workingDir + "/*.go")
 	if err != nil {
 		return nil, fmt.Errorf("error finding go files: %v", err)
 	}
@@ -126,16 +165,17 @@ func getFilesInDirectory() ([]string, error) {
 	return files, nil
 }
 
-func parseFlags() (typeName string, passthroughMethods map[string]bool) {
+func parseFlags() (typeName string, passthroughMethods map[string]bool, err error) {
+	//TODO rename.
 	var excludeMethodsString string
 	flag.StringVar(&excludeMethodsString, "exclude-methods", "", "Comma-separated list of method names to pass through to the delegate, without interception by the invocationHandler.")
 	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
 	flag.Parse()
 
 	if typeName == "" {
-		log.Fatal("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--passthrough-methods <method1,method2>]")
+		return "", nil, errors.New("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--passthrough-methods <method1,method2>]")
 	}
-	return typeName, csvToMap(excludeMethodsString)
+	return typeName, csvToMap(excludeMethodsString), nil
 }
 
 func csvToMap(csv string) map[string]bool {
