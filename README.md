@@ -44,7 +44,6 @@ to implement adapter functions for every type of `NewXxxProxy`.
 
 - [ ] Add tests
 - [ ] Test or disallow usage on interfaces
-- [ ] Proxy all methods, exported and unexported; client can use method.Name() to decide.
 
 ## License
 
