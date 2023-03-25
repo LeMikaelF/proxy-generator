@@ -111,7 +111,6 @@ func getFilesInDirectory() ([]string, error) {
 		return nil, fmt.Errorf("error getting current working directory: %v", err)
 	}
 
-	//TODO exclude test files
 	files, err := filepath.Glob(wd + "/*.go")
 	if err != nil {
 		return nil, fmt.Errorf("error finding go files: %v", err)
