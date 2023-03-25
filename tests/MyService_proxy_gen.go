@@ -65,6 +65,22 @@ func (d *MyServiceProxy) ContextMethod(ctx context.Context) {
 
 }
 
+func (d *MyServiceProxy) unexportedMethod() {
+
+	method := _MyServiceMethod{
+		methodName: "unexportedMethod",
+		receiver:   "*MyService",
+		method: func(args []any) []any {
+			d.delegate.unexportedMethod()
+			return []any{}
+		},
+	}
+
+	var args []any
+	d.invocationHandler(&method, args)
+
+}
+
 func (d *MyServiceProxy) PassthroughMethod() error {
 
 	return d.delegate.PassthroughMethod()

@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
-	"unicode"
-	"unicode/utf8"
 )
 
 type method struct {
@@ -185,7 +183,7 @@ func findMethods(fileNode ast.Node, structName string, passThroughMethods map[st
 
 	ast.Inspect(fileNode, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || !isExported(funcDecl.Name.Name) {
+		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
 			return true
 		}
 
@@ -334,11 +332,6 @@ func fieldNamesWithTypeAssertions(fields []*ast.Field) string {
 	}
 
 	return strings.Join(namesWithTypeAssertions, ", ")
-}
-
-func isExported(name string) bool {
-	ch, _ := utf8.DecodeRuneInString(name)
-	return unicode.IsUpper(ch)
 }
 
 func typeName(expr ast.Expr) string {
