@@ -63,9 +63,7 @@ func main() {
 	for _, file := range files {
 		fileNode, err := parser.ParseFile(fset, file, nil, parser.AllErrors)
 		if err != nil {
-			//TODO make errors like this fatal.
-			log.Printf("error parsing file %s: %v", file, err)
-			continue
+			log.Fatalf("error parsing file %s: %v", file, err)
 		}
 
 		if structDecl == nil {
