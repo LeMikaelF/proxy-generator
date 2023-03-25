@@ -44,9 +44,6 @@ var proxyTemplate string
 
 func main() {
 	typeName, excludedMethods := parseFlags()
-	if !isExported(typeName) {
-		log.Fatalf("type is unexported")
-	}
 
 	pkg := os.Getenv("GOPACKAGE")
 
