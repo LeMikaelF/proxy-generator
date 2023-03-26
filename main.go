@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	gen, err := generator.New(nil)
+	gen, err := generator.New()
 	if err != nil {
 		log.Fatalf("could not create generator: %v\n", err)
 	}
