@@ -3,12 +3,14 @@ package flags
 import (
 	"errors"
 	"flag"
+	"os"
 	"strings"
 )
 
 type ParsedFlags struct {
 	TypeName           string
 	PassthroughMethods map[string]bool
+	PackageName        string
 }
 
 func Parse() (flags *ParsedFlags, err error) {
@@ -21,7 +23,8 @@ func Parse() (flags *ParsedFlags, err error) {
 	if typeName == "" {
 		return nil, errors.New("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--passthrough-methods <method1,method2>]")
 	}
-	return &ParsedFlags{typeName, csvToMap(passthroughMethodsString)}, nil
+
+	return &ParsedFlags{typeName, csvToMap(passthroughMethodsString), os.Getenv("GOPACKAGE")}, nil
 }
 
 func csvToMap(csv string) map[string]bool {

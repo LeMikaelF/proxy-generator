@@ -35,7 +35,7 @@ func New() (*Generator, error) {
 
 	g := &Generator{
 		workingDir:         workingDir,
-		pkg:                os.Getenv("GOPACKAGE"),
+		pkg:                parsedFlags.PackageName,
 		typeName:           parsedFlags.TypeName,
 		passthroughMethods: parsedFlags.PassthroughMethods,
 	}
