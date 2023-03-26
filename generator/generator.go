@@ -1,7 +1,6 @@
 package generator
 
 import (
-	_ "embed"
 	"fmt"
 	"github.com/LeMikaelF/proxy-generator/generator/internal/flags"
 	"github.com/LeMikaelF/proxy-generator/generator/internal/method"
@@ -14,48 +13,64 @@ import (
 	"path/filepath"
 )
 
+type FileHandler interface {
+	Getwd() (string, error)
+	WriteFile(filename string, data []byte, perm os.FileMode) error
+	Glob(pattern string) ([]string, error)
+}
+
+type OsFileHandler struct{}
+
+func (fh *OsFileHandler) Getwd() (string, error) {
+	return os.Getwd()
+}
+
+func (fh *OsFileHandler) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(filename, data, perm)
+}
+
+func (fh *OsFileHandler) Glob(pattern string) ([]string, error) {
+	return filepath.Glob(pattern)
+}
+
 type Generator struct {
 	workingDir         string
 	pkg                string
 	typeName           string
 	passthroughMethods map[string]bool
-	outputter          func(generatedCode string) error
+	fileHandler        FileHandler
 }
 
-func New() (*Generator, error) {
+func New(fh FileHandler) (*Generator, error) {
+	if fh == nil {
+		fh = &OsFileHandler{}
+	}
+
+	workingDir, err := fh.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("error getting current working directory: %v", err)
+	}
+
+	g := &Generator{
+		workingDir:  workingDir,
+		fileHandler: fh,
+	}
+
 	parsedFlags, err := flags.Parse()
 	if err != nil {
 		return nil, err
 	}
-
-	workingDir, err := getWorkingDir()
-	if err != nil {
-		return nil, err
-	}
-
-	g := &Generator{
-		workingDir:         workingDir,
-		pkg:                parsedFlags.PackageName,
-		typeName:           parsedFlags.TypeName,
-		passthroughMethods: parsedFlags.PassthroughMethods,
-	}
-	g.outputter = g.output
+	g.pkg = parsedFlags.PackageName
+	g.typeName = parsedFlags.TypeName
+	g.passthroughMethods = parsedFlags.PassthroughMethods
 
 	return g, nil
 }
 
-func getWorkingDir() (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("error getting current working directory: %v", err)
-	}
-	return wd, nil
-}
-
 func (g *Generator) Run() error {
-	files, err := g.getFilesInDirectory()
+	files, err := g.fileHandler.Glob(g.workingDir + "/*.go")
 	if err != nil {
-		return fmt.Errorf("error getting files in working directory: %v", err)
+		return fmt.Errorf("error finding go files: %v", err)
 	}
 
 	fset := token.NewFileSet()
@@ -98,7 +113,8 @@ func (g *Generator) Run() error {
 		return err
 	}
 
-	if err := g.outputter(string(generatedCode)); err != nil {
+	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", g.typeName)
+	if err := g.fileHandler.WriteFile(generatedFileName, []byte(generatedCode), 0666); err != nil {
 		return fmt.Errorf("error outputting code: %v", err)
 	}
 
@@ -110,19 +126,4 @@ func toSlice(m map[string]struct{}) (slice []string) {
 		slice = append(slice, k)
 	}
 	return slice
-}
-
-func (g *Generator) output(generatedCode string) error {
-	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", g.typeName)
-
-	return os.WriteFile(generatedFileName, []byte(generatedCode), 0666)
-}
-
-func (g *Generator) getFilesInDirectory() ([]string, error) {
-	files, err := filepath.Glob(g.workingDir + "/*.go")
-	if err != nil {
-		return nil, fmt.Errorf("error finding go files: %v", err)
-	}
-
-	return files, nil
 }
