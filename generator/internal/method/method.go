@@ -59,7 +59,7 @@ func parameterStrings(fields []*ast.Field) string {
 	for _, field := range fields {
 		parts = append(parts, fmt.Sprintf("%s %s", strings.Join(names(field.Names), " "), typeName(field.Type)))
 	}
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, ",")
 }
 
 func names(idents []*ast.Ident) []string {
@@ -73,7 +73,7 @@ func names(idents []*ast.Ident) []string {
 
 func fieldNamesCommaDelimited(fields []*ast.Field) string {
 	names := fieldNames(fields)
-	return strings.Join(names, ", ")
+	return strings.Join(names, ",")
 }
 
 func fieldNames(fields []*ast.Field) []string {
@@ -96,7 +96,7 @@ func fieldNamesWithTypeAssertions(fields []*ast.Field) string {
 		}
 	}
 
-	return strings.Join(namesWithTypeAssertions, ", ")
+	return strings.Join(namesWithTypeAssertions, ",")
 }
 
 func populateResults(m *Method, funcDecl *ast.FuncDecl) {
@@ -110,10 +110,10 @@ func populateResults(m *Method, funcDecl *ast.FuncDecl) {
 func returnParametersString(fields []*ast.Field) string {
 	parts := make([]string, 0, len(fields))
 	for _, field := range fields {
-		parts = append(parts, fmt.Sprintf("%s %s", strings.Join(names(field.Names), " "), typeName(field.Type)))
+		parts = append(parts, typeName(field.Type))
 	}
 
-	joined := strings.Join(parts, ", ")
+	joined := strings.Join(parts, ",")
 
 	if len(fields) > 1 {
 		joined = "(" + joined + ")"
