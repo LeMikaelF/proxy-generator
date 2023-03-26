@@ -54,12 +54,36 @@ func populateParameters(m *Method, funcDecl *ast.FuncDecl) {
 	}
 }
 
-func populateResults(m *Method, funcDecl *ast.FuncDecl) {
-	if funcDecl.Type.Results != nil {
-		m.Results = returnParametersString(funcDecl.Type.Results.List)
-		m.ResultTypes = typeNames(funcDecl.Type.Results.List)
-		m.ResultExprs = funcDecl.Type.Results.List
+func parameterStrings(fields []*ast.Field) string {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, fmt.Sprintf("%s %s", strings.Join(names(field.Names), " "), typeName(field.Type)))
 	}
+	return strings.Join(parts, ", ")
+}
+
+func names(idents []*ast.Ident) []string {
+	parts := make([]string, 0, len(idents))
+
+	for _, ident := range idents {
+		parts = append(parts, ident.Name)
+	}
+	return parts
+}
+
+func fieldNamesCommaDelimited(fields []*ast.Field) string {
+	names := fieldNames(fields)
+	return strings.Join(names, ", ")
+}
+
+func fieldNames(fields []*ast.Field) []string {
+	var names []string
+	for _, field := range fields {
+		for _, name := range field.Names {
+			names = append(names, name.Name)
+		}
+	}
+	return names
 }
 
 func fieldNamesWithTypeAssertions(fields []*ast.Field) string {
@@ -75,12 +99,12 @@ func fieldNamesWithTypeAssertions(fields []*ast.Field) string {
 	return strings.Join(namesWithTypeAssertions, ", ")
 }
 
-func parameterStrings(fields []*ast.Field) string {
-	parts := make([]string, 0, len(fields))
-	for _, field := range fields {
-		parts = append(parts, fmt.Sprintf("%s %s", strings.Join(names(field.Names), " "), typeName(field.Type)))
+func populateResults(m *Method, funcDecl *ast.FuncDecl) {
+	if funcDecl.Type.Results != nil {
+		m.Results = returnParametersString(funcDecl.Type.Results.List)
+		m.ResultTypes = typeNames(funcDecl.Type.Results.List)
+		m.ResultExprs = funcDecl.Type.Results.List
 	}
-	return strings.Join(parts, ", ")
 }
 
 func returnParametersString(fields []*ast.Field) string {
@@ -96,11 +120,6 @@ func returnParametersString(fields []*ast.Field) string {
 	}
 
 	return joined
-}
-
-func fieldNamesCommaDelimited(fields []*ast.Field) string {
-	names := fieldNames(fields)
-	return strings.Join(names, ", ")
 }
 
 func typeNames(idents []*ast.Field) []string {
@@ -132,23 +151,4 @@ func typeName(expr ast.Expr) string {
 	default:
 		panic(fmt.Sprintf("could not infer name for type %T", t))
 	}
-}
-
-func fieldNames(fields []*ast.Field) []string {
-	var names []string
-	for _, field := range fields {
-		for _, name := range field.Names {
-			names = append(names, name.Name)
-		}
-	}
-	return names
-}
-
-func names(idents []*ast.Ident) []string {
-	parts := make([]string, 0, len(idents))
-
-	for _, ident := range idents {
-		parts = append(parts, ident.Name)
-	}
-	return parts
 }

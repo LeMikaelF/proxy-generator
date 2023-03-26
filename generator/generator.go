@@ -118,41 +118,6 @@ func (g *Generator) Run() error {
 	return nil
 }
 
-func (g *Generator) generateCode(packageName string, methods []method.Method, imports map[string]struct{}) ([]byte, error) {
-	var buf bytes.Buffer
-	err := template.Must(template.New("proxy").Parse(proxyTemplate)).
-		Execute(&buf, data{
-			PackageName: packageName,
-			StructName:  g.typeName,
-			ProxyName:   g.typeName + "Proxy",
-			Methods:     methods,
-			Imports:     toSlice(imports),
-		})
-	if err != nil {
-		return nil, fmt.Errorf("error executing template: %v", err)
-	}
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("error formatting code: %v", err)
-	}
-	return formatted, nil
-}
-
-func (g *Generator) output(generatedCode string) error {
-	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", g.typeName)
-
-	return os.WriteFile(generatedFileName, []byte(generatedCode), 0666)
-}
-
-func (g *Generator) getFilesInDirectory() ([]string, error) {
-	files, err := filepath.Glob(g.workingDir + "/*.go")
-	if err != nil {
-		return nil, fmt.Errorf("error finding go files: %v", err)
-	}
-
-	return files, nil
-}
-
 func parseFlags() (typeName string, passthroughMethods map[string]bool, err error) {
 	//TODO rename.
 	var excludeMethodsString string
@@ -177,11 +142,19 @@ func csvToMap(csv string) map[string]bool {
 	return m
 }
 
-func toSlice(m map[string]struct{}) (slice []string) {
-	for k := range m {
-		slice = append(slice, k)
+func (g *Generator) output(generatedCode string) error {
+	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", g.typeName)
+
+	return os.WriteFile(generatedFileName, []byte(generatedCode), 0666)
+}
+
+func (g *Generator) getFilesInDirectory() ([]string, error) {
+	files, err := filepath.Glob(g.workingDir + "/*.go")
+	if err != nil {
+		return nil, fmt.Errorf("error finding go files: %v", err)
 	}
-	return slice
+
+	return files, nil
 }
 
 func findStructDeclaration(fileNode ast.Node, typeName string) *ast.GenDecl {
@@ -238,31 +211,6 @@ type importInfo struct {
 	Alias string
 }
 
-func populateImports(imports map[string]struct{}, m method.Method, importMap map[string]importInfo) {
-	for _, field := range append(m.ParamTypes, m.ResultExprs...) {
-		switch t := field.Type.(type) {
-		case *ast.Ident:
-			if info, ok := importMap[t.Name]; ok {
-				imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
-			}
-		case *ast.SelectorExpr:
-			if x, ok := t.X.(*ast.Ident); ok {
-				if info, ok := importMap[x.Name]; ok {
-					imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
-				}
-			}
-		case *ast.StarExpr:
-			if se, ok := t.X.(*ast.SelectorExpr); ok {
-				if x, ok := se.X.(*ast.Ident); ok {
-					if info, ok := importMap[x.Name]; ok {
-						imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
-					}
-				}
-			}
-		}
-	}
-}
-
 func collectImports(fileNode ast.Node) map[string]importInfo {
 	importMap := make(map[string]importInfo)
 
@@ -289,14 +237,6 @@ func collectImports(fileNode ast.Node) map[string]importInfo {
 	return importMap
 }
 
-func mapToSlice(imports map[string]struct{}) []string {
-	importsList := make([]string, 0, len(imports))
-	for k := range imports {
-		importsList = append(importsList, k)
-	}
-	return importsList
-}
-
 func getReceiver(funcDecl *ast.FuncDecl) (ast.Expr, bool) {
 	recvType := funcDecl.Recv.List[0].Type
 	starExpr, isStar := recvType.(*ast.StarExpr)
@@ -304,4 +244,64 @@ func getReceiver(funcDecl *ast.FuncDecl) (ast.Expr, bool) {
 		recvType = starExpr.X
 	}
 	return recvType, isStar
+}
+
+func (g *Generator) generateCode(packageName string, methods []method.Method, imports map[string]struct{}) ([]byte, error) {
+	var buf bytes.Buffer
+	err := template.Must(template.New("proxy").Parse(proxyTemplate)).
+		Execute(&buf, data{
+			PackageName: packageName,
+			StructName:  g.typeName,
+			ProxyName:   g.typeName + "Proxy",
+			Methods:     methods,
+			Imports:     toSlice(imports),
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error executing template: %v", err)
+	}
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("error formatting code: %v", err)
+	}
+	return formatted, nil
+}
+
+func toSlice(m map[string]struct{}) (slice []string) {
+	for k := range m {
+		slice = append(slice, k)
+	}
+	return slice
+}
+
+func populateImports(imports map[string]struct{}, m method.Method, importMap map[string]importInfo) {
+	for _, field := range append(m.ParamTypes, m.ResultExprs...) {
+		switch t := field.Type.(type) {
+		case *ast.Ident:
+			if info, ok := importMap[t.Name]; ok {
+				imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
+			}
+		case *ast.SelectorExpr:
+			if x, ok := t.X.(*ast.Ident); ok {
+				if info, ok := importMap[x.Name]; ok {
+					imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
+				}
+			}
+		case *ast.StarExpr:
+			if se, ok := t.X.(*ast.SelectorExpr); ok {
+				if x, ok := se.X.(*ast.Ident); ok {
+					if info, ok := importMap[x.Name]; ok {
+						imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+}
+
+func mapToSlice(imports map[string]struct{}) []string {
+	importsList := make([]string, 0, len(imports))
+	for k := range imports {
+		importsList = append(importsList, k)
+	}
+	return importsList
 }
