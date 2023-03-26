@@ -34,6 +34,7 @@ type TestStruct struct {}
 }
 
 // TODO test pointer receiver
+// TODO test methods with imported parameters.
 func TestFindMethods(t *testing.T) {
 	src := `
 package test
