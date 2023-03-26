@@ -70,7 +70,7 @@ func (g *Generator) Run() error {
 		if err != nil {
 			return fmt.Errorf("error parsing file %s: %v", file, err)
 		}
-		sourceFile := (*source.File)(fileNode)
+		sourceFile := source.NewFile(fileNode)
 
 		if fileNode.Name.Name != g.pkg {
 			continue

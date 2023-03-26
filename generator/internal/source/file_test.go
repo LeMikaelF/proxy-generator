@@ -24,7 +24,7 @@ type TestStruct struct {}
 `
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, "", src, 0)
-	file := New(f, &mockInspector{})
+	file := newTestFile(f, &mockInspector{})
 
 	result := file.FindStructDeclaration("TestStruct")
 
@@ -42,7 +42,7 @@ func (t TestStruct) TestMethod() {}
 `
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, "", src, 0)
-	file := New(f, &mockInspector{})
+	file := newTestFile(f, &mockInspector{})
 
 	methods, imports := file.FindMethods("TestStruct", map[string]bool{})
 
@@ -70,6 +70,12 @@ func (t TestStruct) TestMethod() {}
 	}
 }
 
+func newTestFile(f *ast.File, m *mockInspector) *File {
+	inspect := &inspectorAdapter{m.Inspect, f}
+	file := &File{file: f, inspect: inspect.Inspect}
+	return file
+}
+
 func TestCollectImports(t *testing.T) {
 	src := `
 package test
@@ -80,7 +86,7 @@ import (
 `
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, "", src, 0)
-	file := New(f, &mockInspector{})
+	file := newTestFile(f, &mockInspector{})
 
 	importMap := file.collectImports()
 

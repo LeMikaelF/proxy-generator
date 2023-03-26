@@ -9,33 +9,29 @@ import (
 	"strings"
 )
 
-type Inspector interface {
-	Inspect(node ast.Node, pre func(ast.Node) bool)
-}
-
 type inspectorAdapter struct {
-	delegate Inspector
+	delegate func(node ast.Node, f func(ast.Node) bool)
 	file     *ast.File
 }
 
 func (i *inspectorAdapter) Inspect(pre func(ast.Node) bool) {
-	i.delegate.Inspect(i.file, pre)
+	i.delegate(i.file, pre)
 }
 
 type File struct {
-	file      *ast.File
-	inspector inspectorAdapter
+	file    *ast.File
+	inspect func(pre func(ast.Node) bool)
 }
 
-// TODO don't take an inspector as an argument, just use ast.Inspect
-func New(file *ast.File, inspector Inspector) *File {
-	return &File{file: file, inspector: inspectorAdapter{inspector, file}}
+func NewFile(file *ast.File) *File {
+	inspect := &inspectorAdapter{ast.Inspect, file}
+	return &File{file: file, inspect: inspect.Inspect}
 }
 
 func (s *File) FindStructDeclaration(typeName string) *ast.GenDecl {
 	var structDecl *ast.GenDecl
 
-	s.inspector.Inspect(func(n ast.Node) bool {
+	s.inspect(func(n ast.Node) bool {
 		genDecl, ok := n.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.TYPE {
 			return true
@@ -62,7 +58,7 @@ func (s *File) FindMethods(structName string, passThroughMethods map[string]bool
 	imports := make(map[string]struct{})
 	importMap := s.collectImports()
 
-	s.inspector.Inspect(func(n ast.Node) bool {
+	s.inspect(func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
 			return true
@@ -94,7 +90,7 @@ type importInfo struct {
 func (s *File) collectImports() map[string]importInfo {
 	importMap := make(map[string]importInfo)
 
-	s.inspector.Inspect(func(n ast.Node) bool {
+	s.inspect(func(n ast.Node) bool {
 		importSpec, ok := n.(*ast.ImportSpec)
 		if !ok {
 			return true
