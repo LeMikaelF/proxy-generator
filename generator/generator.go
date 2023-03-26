@@ -119,16 +119,15 @@ func (g *Generator) Run() error {
 }
 
 func parseFlags() (typeName string, passthroughMethods map[string]bool, err error) {
-	//TODO rename.
-	var excludeMethodsString string
-	flag.StringVar(&excludeMethodsString, "exclude-methods", "", "Comma-separated list of method names to pass through to the delegate, without interception by the invocationHandler.")
+	var passthroughMethodsString string
+	flag.StringVar(&passthroughMethodsString, "passthrough-methods", "", "Comma-separated list of method names to pass through to the delegate, without interception by the invocationHandler.")
 	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
 	flag.Parse()
 
 	if typeName == "" {
 		return "", nil, errors.New("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--passthrough-methods <method1,method2>]")
 	}
-	return typeName, csvToMap(excludeMethodsString), nil
+	return typeName, csvToMap(passthroughMethodsString), nil
 }
 
 func csvToMap(csv string) map[string]bool {
