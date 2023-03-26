@@ -1,21 +1,17 @@
 package generator
 
 import (
-	"bytes"
 	_ "embed"
-	"errors"
-	"flag"
 	"fmt"
+	"github.com/LeMikaelF/proxy-generator/generator/internal/flags"
 	"github.com/LeMikaelF/proxy-generator/generator/internal/method"
+	"github.com/LeMikaelF/proxy-generator/generator/internal/source"
+	"github.com/LeMikaelF/proxy-generator/generator/internal/tmpl"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
-	"text/template"
 )
 
 type Generator struct {
@@ -27,7 +23,7 @@ type Generator struct {
 }
 
 func New() (*Generator, error) {
-	typeName, passthroughMethods, err := parseFlags()
+	parsedFlags, err := flags.Parse()
 	if err != nil {
 		return nil, err
 	}
@@ -40,8 +36,8 @@ func New() (*Generator, error) {
 	g := &Generator{
 		workingDir:         workingDir,
 		pkg:                os.Getenv("GOPACKAGE"),
-		typeName:           typeName,
-		passthroughMethods: passthroughMethods,
+		typeName:           parsedFlags.TypeName,
+		passthroughMethods: parsedFlags.PassthroughMethods,
 	}
 	g.outputter = g.output
 
@@ -55,17 +51,6 @@ func getWorkingDir() (string, error) {
 	}
 	return wd, nil
 }
-
-type data struct {
-	PackageName string
-	StructName  string
-	ProxyName   string
-	Methods     []method.Method
-	Imports     []string
-}
-
-//go:embed proxy.tmpl
-var proxyTemplate string
 
 func (g *Generator) Run() error {
 	files, err := g.getFilesInDirectory()
@@ -85,17 +70,18 @@ func (g *Generator) Run() error {
 		if err != nil {
 			return fmt.Errorf("error parsing file %s: %v", file, err)
 		}
+		sourceFile := (*source.File)(fileNode)
 
 		if fileNode.Name.Name != g.pkg {
 			continue
 		}
 
 		if structDecl == nil {
-			structDecl = findStructDeclaration(fileNode, g.typeName)
+			structDecl = sourceFile.FindStructDeclaration(g.typeName)
 			packageName = fileNode.Name.Name
 		}
 
-		newMethods, newImports := findMethods(fileNode, g.typeName, g.passthroughMethods)
+		newMethods, newImports := sourceFile.FindMethods(g.typeName, g.passthroughMethods)
 		methods = append(methods, newMethods...)
 		for _, newImport := range newImports {
 			imports[newImport] = struct{}{}
@@ -106,7 +92,8 @@ func (g *Generator) Run() error {
 		return fmt.Errorf("could not find struct declaration with name %s", g.typeName)
 	}
 
-	generatedCode, err := g.generateCode(packageName, methods, imports)
+	template := tmpl.New(packageName, g.typeName, methods, toSlice(imports))
+	generatedCode, err := template.Render()
 	if err != nil {
 		return err
 	}
@@ -118,27 +105,11 @@ func (g *Generator) Run() error {
 	return nil
 }
 
-func parseFlags() (typeName string, passthroughMethods map[string]bool, err error) {
-	var passthroughMethodsString string
-	flag.StringVar(&passthroughMethodsString, "passthrough-methods", "", "Comma-separated list of method names to pass through to the delegate, without interception by the invocationHandler.")
-	flag.StringVar(&typeName, "type", "", "Name of the type to decorate")
-	flag.Parse()
-
-	if typeName == "" {
-		return "", nil, errors.New("usage: go run github.com/LeMikaelF/proxy-generator --type <type> [--passthrough-methods <method1,method2>]")
+func toSlice(m map[string]struct{}) (slice []string) {
+	for k := range m {
+		slice = append(slice, k)
 	}
-	return typeName, csvToMap(passthroughMethodsString), nil
-}
-
-func csvToMap(csv string) map[string]bool {
-	m := map[string]bool{}
-	if csv != "" {
-		slice := strings.Split(csv, ",")
-		for _, element := range slice {
-			m[element] = true
-		}
-	}
-	return m
+	return slice
 }
 
 func (g *Generator) output(generatedCode string) error {
@@ -154,153 +125,4 @@ func (g *Generator) getFilesInDirectory() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func findStructDeclaration(fileNode ast.Node, typeName string) *ast.GenDecl {
-	var structDecl *ast.GenDecl
-	ast.Inspect(fileNode, func(n ast.Node) bool {
-		genDecl, ok := n.(*ast.GenDecl)
-		if !ok || genDecl.Tok != token.TYPE {
-			return true
-		}
-
-		for _, spec := range genDecl.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if ok && typeSpec.Name.Name == typeName {
-				structDecl = genDecl
-				return false
-			}
-		}
-		return true
-	})
-	return structDecl
-}
-
-func findMethods(fileNode ast.Node, structName string, passThroughMethods map[string]bool) ([]method.Method, []string) {
-	var methods []method.Method
-	imports := make(map[string]struct{})
-	importMap := collectImports(fileNode)
-
-	ast.Inspect(fileNode, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
-			return true
-		}
-
-		recvType, hasStar := getReceiver(funcDecl)
-
-		ident, ok := recvType.(*ast.Ident)
-		if !ok || ident.Name != structName {
-			return true
-		}
-
-		m := method.New(passThroughMethods, funcDecl, ident, hasStar)
-		methods = append(methods, m)
-
-		populateImports(imports, m, importMap)
-
-		return true
-	})
-
-	return methods, mapToSlice(imports)
-}
-
-type importInfo struct {
-	Path  string
-	Alias string
-}
-
-func collectImports(fileNode ast.Node) map[string]importInfo {
-	importMap := make(map[string]importInfo)
-
-	ast.Inspect(fileNode, func(n ast.Node) bool {
-		importSpec, ok := n.(*ast.ImportSpec)
-		if !ok {
-			return true
-		}
-
-		importPath := strings.Trim(importSpec.Path.Value, "\"")
-
-		alias := ""
-		if importSpec.Name != nil {
-			alias = importSpec.Name.Name
-		} else {
-			_, alias = path.Split(importPath)
-		}
-
-		importMap[alias] = importInfo{Path: importPath, Alias: alias}
-
-		return true
-	})
-
-	return importMap
-}
-
-func getReceiver(funcDecl *ast.FuncDecl) (ast.Expr, bool) {
-	recvType := funcDecl.Recv.List[0].Type
-	starExpr, isStar := recvType.(*ast.StarExpr)
-	if isStar {
-		recvType = starExpr.X
-	}
-	return recvType, isStar
-}
-
-func (g *Generator) generateCode(packageName string, methods []method.Method, imports map[string]struct{}) ([]byte, error) {
-	var buf bytes.Buffer
-	err := template.Must(template.New("proxy").Parse(proxyTemplate)).
-		Execute(&buf, data{
-			PackageName: packageName,
-			StructName:  g.typeName,
-			ProxyName:   g.typeName + "Proxy",
-			Methods:     methods,
-			Imports:     toSlice(imports),
-		})
-	if err != nil {
-		return nil, fmt.Errorf("error executing template: %v", err)
-	}
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("error formatting code: %v", err)
-	}
-	return formatted, nil
-}
-
-func toSlice(m map[string]struct{}) (slice []string) {
-	for k := range m {
-		slice = append(slice, k)
-	}
-	return slice
-}
-
-func populateImports(imports map[string]struct{}, m method.Method, importMap map[string]importInfo) {
-	for _, field := range append(m.ParamTypes, m.ResultExprs...) {
-		switch t := field.Type.(type) {
-		case *ast.Ident:
-			if info, ok := importMap[t.Name]; ok {
-				imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
-			}
-		case *ast.SelectorExpr:
-			if x, ok := t.X.(*ast.Ident); ok {
-				if info, ok := importMap[x.Name]; ok {
-					imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
-				}
-			}
-		case *ast.StarExpr:
-			if se, ok := t.X.(*ast.SelectorExpr); ok {
-				if x, ok := se.X.(*ast.Ident); ok {
-					if info, ok := importMap[x.Name]; ok {
-						imports[fmt.Sprintf("%s %q", info.Alias, info.Path)] = struct{}{}
-					}
-				}
-			}
-		}
-	}
-}
-
-func mapToSlice(imports map[string]struct{}) []string {
-	importsList := make([]string, 0, len(imports))
-	for k := range imports {
-		importsList = append(importsList, k)
-	}
-	return importsList
 }
