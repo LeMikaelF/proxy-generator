@@ -8,7 +8,7 @@ import (
 	alias "net/http/httptest"
 )
 
-//go:generate go run ../main.go --type MyService --exclude-methods PassthroughMethod myservice.go
+//go:generate go run ../main.go --type MyService --passthrough-methods PassthroughMethod myservice.go
 type MyService struct {
 	param1 string
 	param2 string
