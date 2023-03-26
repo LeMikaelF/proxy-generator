@@ -13,23 +13,28 @@ import (
 	"path/filepath"
 )
 
-type FileHandler interface {
-	Getwd() (string, error)
-	WriteFile(filename string, data []byte, perm os.FileMode) error
-	Glob(pattern string) ([]string, error)
+type fileHandler interface {
+	getwd() (string, error)
+	readFile(filename string) ([]byte, error) // Add ReadFile
+	writeFile(filename string, data []byte, perm os.FileMode) error
+	glob(pattern string) ([]string, error)
 }
 
 type OsFileHandler struct{}
 
-func (fh *OsFileHandler) Getwd() (string, error) {
+func (fh *OsFileHandler) getwd() (string, error) {
 	return os.Getwd()
 }
 
-func (fh *OsFileHandler) WriteFile(filename string, data []byte, perm os.FileMode) error {
+func (fh *OsFileHandler) readFile(filename string) ([]byte, error) {
+	return os.ReadFile(filename)
+}
+
+func (fh *OsFileHandler) writeFile(filename string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(filename, data, perm)
 }
 
-func (fh *OsFileHandler) Glob(pattern string) ([]string, error) {
+func (fh *OsFileHandler) glob(pattern string) ([]string, error) {
 	return filepath.Glob(pattern)
 }
 
@@ -38,15 +43,20 @@ type Generator struct {
 	pkg                string
 	typeName           string
 	passthroughMethods map[string]bool
-	fileHandler        FileHandler
+	fileHandler        fileHandler
 }
 
-func New(fh FileHandler) (*Generator, error) {
-	if fh == nil {
-		fh = &OsFileHandler{}
+func New() (*Generator, error) {
+	parsedFlags, err := flags.Parse()
+	if err != nil {
+		return nil, err
 	}
 
-	workingDir, err := fh.Getwd()
+	return new(&OsFileHandler{}, parsedFlags)
+}
+
+func new(fh fileHandler, parsedFlags *flags.ParsedFlags) (*Generator, error) {
+	workingDir, err := fh.getwd()
 	if err != nil {
 		return nil, fmt.Errorf("error getting current working directory: %v", err)
 	}
@@ -56,10 +66,6 @@ func New(fh FileHandler) (*Generator, error) {
 		fileHandler: fh,
 	}
 
-	parsedFlags, err := flags.Parse()
-	if err != nil {
-		return nil, err
-	}
 	g.pkg = parsedFlags.PackageName
 	g.typeName = parsedFlags.TypeName
 	g.passthroughMethods = parsedFlags.PassthroughMethods
@@ -68,7 +74,7 @@ func New(fh FileHandler) (*Generator, error) {
 }
 
 func (g *Generator) Run() error {
-	files, err := g.fileHandler.Glob(g.workingDir + "/*.go")
+	files, err := g.fileHandler.glob(g.workingDir + "/*.go")
 	if err != nil {
 		return fmt.Errorf("error finding go files: %v", err)
 	}
@@ -81,10 +87,12 @@ func (g *Generator) Run() error {
 	imports := make(map[string]struct{})
 
 	for _, file := range files {
-		fileNode, err := parser.ParseFile(fset, file, nil, parser.AllErrors)
+		fileData, err := g.fileHandler.readFile(file) // Read the file contents from the file handler
 		if err != nil {
-			return fmt.Errorf("error parsing file %s: %v", file, err)
+			return fmt.Errorf("error reading file %s: %v", file, err)
 		}
+		fileNode, err := parser.ParseFile(fset, file, fileData, parser.AllErrors)
+
 		sourceFile := source.NewFile(fileNode)
 
 		if fileNode.Name.Name != g.pkg {
@@ -114,7 +122,7 @@ func (g *Generator) Run() error {
 	}
 
 	generatedFileName := fmt.Sprintf("%s_proxy_gen.go", g.typeName)
-	if err := g.fileHandler.WriteFile(generatedFileName, []byte(generatedCode), 0666); err != nil {
+	if err := g.fileHandler.writeFile(generatedFileName, []byte(generatedCode), 0666); err != nil {
 		return fmt.Errorf("error outputting code: %v", err)
 	}
 
